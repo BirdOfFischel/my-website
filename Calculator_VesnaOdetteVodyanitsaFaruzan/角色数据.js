@@ -106,7 +106,7 @@ const template = {
 
 
 // #region 薇斯纳角色数据
-const Vesna = {
+export const Vesna = {
   name : "薇斯纳",  // 角色名称
   rarity: 5, // 稀有度，计算金数用
   ID : "Vesna",  // 角色ID
@@ -314,7 +314,7 @@ function constellation_6_of_Vesna(teamInitialAttributes, teamNetAttributes, acti
 // #endregion
 
 // #region 奥黛塔角色数据
-const Odette = {
+export const Odette = {
   name : "奥黛塔",  // 角色名称
   rarity: 5,
   ID : "Odette",  // 角色ID
@@ -548,7 +548,7 @@ function constellation_6_3_of_Odette(teamInitialAttributes, teamNetAttributes, a
 
 
 // #region 沃雅妮莎角色数据
-const Vodyanitsa = {
+export const Vodyanitsa = {
   name : "沃雅妮莎",  // 角色名称
   rarity: 5,
   ID : "Vodyanitsa",  // 角色ID
@@ -774,7 +774,7 @@ function constellation_6_4_of_Vodyanitsa(teamInitialAttributes, teamNetAttribute
 
 
 // #region  珐露珊角色数据
-  const Faruzan = {
+  export const Faruzan = {
     name : "珐露珊",
     rarity: 4,
     ID : "Faruzan",

@@ -3,7 +3,7 @@
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
 
 
-class ArtifactSet_ScarletProof{ // 血红之证
+export class ArtifactSet_ScarletProof{ // 血红之证
   constructor(ID = "ScarletProof", equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
@@ -39,7 +39,7 @@ class ArtifactSet_ScarletProof{ // 血红之证
 function piece_2_of_ScarletProof(teamInitialAttributes, teamNetAttributes, action, activated = false){ return {atkp : 0.18}; };
 function piece_4_of_ScarletProof(teamInitialAttributes, teamNetAttributes, action, activated = false){ return {cr : 0.16, stellarSwirlDMG:0.40}; };
 
-class ArtifactSet_HeartoftheFurnace { // 炉火融炼之心
+export class ArtifactSet_HeartoftheFurnace { // 炉火融炼之心
   constructor(ID = "HeartoftheFurnace", equipperID = undefined, equipperName = equipperID) {
     const self = this;
     this.ID = ID;
@@ -79,7 +79,7 @@ function piece_2_of_HeartoftheFurnace(teamInitialAttributes, teamNetAttributes, 
 function piece_4_1_of_HeartoftheFurnace(teamInitialAttributes, teamNetAttributes, action, activated = false){return {atkp:0.12}};
 function piece_4_2_of_HeartoftheFurnace(teamInitialAttributes, teamNetAttributes, action, activated = false){return {stellarConductDMG:0.5, stellarSwirlDMG:0.5}};
 
-class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
+export class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
   constructor(ID = "TenacityoftheMillelith", equipperID = undefined, equipperName = equipperID) {
     const self = this;
     this.ID = ID;
@@ -116,7 +116,7 @@ class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
 function piece_2_of_TenacityoftheMillelith(teamInitialAttributes, teamNetAttributes, action, activated = false){return {hpp:0.2}};
 function piece_4_of_TenacityoftheMillelith(teamInitialAttributes, teamNetAttributes, action, activated = false){return {atkp:0.2, ss:0.3}}
 
-class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
+export class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
   constructor(ID = "NoblesseOblige", equipperID = undefined, equipperName = equipperID){
     const self = this;
     this.ID = ID;

@@ -4,7 +4,7 @@
 
 
 // #region 单手剑 
-class Weapon_BeyondtheChrysalis{// 单手剑：蝶变
+export class Weapon_BeyondtheChrysalis{// 单手剑：蝶变
   constructor(ID = "BeyondtheChrysalis", rank=1, equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
@@ -43,7 +43,7 @@ function effect_of_weapon_BeyondtheChrysalis(teamInitialAttributes, teamNetAttri
   return {cd : 0.42 + 0.14*weapon.rank, stellarSwirlDMG : 0.27+0.09*weapon.rank}; 
 };
 
-class Weapon_ExaiphanesBlade { // 单手剑：星锋剑
+export class Weapon_ExaiphanesBlade { // 单手剑：星锋剑
   constructor(ID = "ExaiphanesBlade", rank = 1, equipperID = undefined, equipperName=equipperID) {
     const self = this;
     this.ID = ID;
@@ -84,7 +84,7 @@ function effect_of_weapon_ExaiphanesBlade(teamInitialAttributes, teamNetAttribut
   return {cd : cd, atkp : ExaiphanesBladeEffectAtkpDict[weapon.rank]}; 
 };
 
-class Weapon_WhitelakeFrostfeather {// 单手剑：白湖冬羽
+export class Weapon_WhitelakeFrostfeather {// 单手剑：白湖冬羽
   constructor(ID = "WhitelakeFrostfeather", rank = 1, equipperID = undefined, equipperName=equipperID) {
     const self = this;
     this.ID = ID;
@@ -124,7 +124,7 @@ function effect_of_weapon_WhitelakeFrostfeather(teamInitialAttributes, teamNetAt
   return {atkp: 0.18+0.06*weapon.rank, cd : WhitelakeFrostfeatherEffectCritDMGDict[weapon.rank]};
 }
 
-class Weapon_NewBough{// 单手剑：新枝
+export class Weapon_NewBough{// 单手剑：新枝
   constructor(ID = "NewBough", rank=5, equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
@@ -178,7 +178,7 @@ function effect_2_of_weapon_NewBough(teamInitialAttributes, teamNetAttributes, a
 }
 
 
-class Weapon_SliverLight{// 单手剑：银釭
+export class Weapon_SliverLight{// 单手剑：银釭
   constructor(ID = "SliverLight", rank=5, equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
@@ -218,7 +218,7 @@ function effect_of_weapon_SliverLight(teamInitialAttributes, teamNetAttributes, 
 }
 
 
-class Weapon_FinaleoftheDeep{// 单手剑：海渊终曲
+export class Weapon_FinaleoftheDeep{// 单手剑：海渊终曲
   constructor(ID = "FinaleoftheDeep", rank=5, equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
@@ -283,7 +283,7 @@ function effect_2_of_weapon_FinaleoftheDeep(teamInitialAttributes, teamNetAttrib
 
 // #region 法器
 
-class Weapon_HymnoftheMaelstrom {// 法器：漩流颂歌
+export class Weapon_HymnoftheMaelstrom {// 法器：漩流颂歌
   constructor(ID = "HymnoftheMaelstrom", rank = 1, equipperID = undefined, equipperName=equipperID) {
     const self = this;
     this.ID = ID;
@@ -335,7 +335,7 @@ function effect_2_of_weapon_HymnoftheMaelstrom(teamInitialAttributes, teamNetAtt
   return {atkp:atkpBonus*mult};
 }
 
-class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
+export class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
   constructor(ID = "ThrillingTalesofDragonSlayers", rank = 5, equipperID = undefined, equipperName=equipperID) {
     const self = this;
     this.ID = ID;
@@ -379,7 +379,7 @@ function effect_of_weapon_ThrillingTalesofDragonSlayers(teamInitialAttributes, t
 
 
 // #region 弓
-class Weapon_BreezeborneRefrain{ // 弓：柔风游弦
+export class Weapon_BreezeborneRefrain{ // 弓：柔风游弦
   constructor(ID = "BreezeborneRefrain", rank = 5, equipperID = undefined, equipperName=equipperID) {
     const self = this;
     this.ID = ID;
@@ -427,7 +427,7 @@ function effect_2_of_weapon_BreezeborneRefrain(teamInitialAttributes, teamNetAtt
 }
 
 
-class Weapon_FavoniusWarbow{// 弓：西风猎弓
+export class Weapon_FavoniusWarbow{// 弓：西风猎弓
   constructor(ID = "FavoniusWarbow", rank=5, equipperID=undefined, equipperName=equipperID){
     const self = this;
     this.ID = ID;
