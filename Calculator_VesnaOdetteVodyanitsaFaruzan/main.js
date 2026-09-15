@@ -301,11 +301,12 @@ function update_team_effects(){
   }
 }
 function combine_buffs(buffs){
-  
   return buffs.reduce((result, obj) => {
       for (let [key, value] of Object.entries(obj)) {
-          
+        if(typeof value === "number" && (result[key] === undefined || typeof result[key] === "number")){
           result[key] = (result[key] || 0) + value;
+        }
+        else{result[key] = value;}
       }
       return result;
   }, {});
@@ -1474,7 +1475,7 @@ function create_character_build_part(buildId){
       constellationSubDiv3.replaceChildren(); 
       create_paragraphs_from_strings(constellationSubDiv3, get_constellation_desc_array(charID, constellation));
     }
-    constellationSubDiv2_select.onchange = function(){char.constellation = Number(this.value); toUpdateAttributes[charID] = true; 
+    constellationSubDiv2_select.onchange = function(){char.constellation = Number(this.value); initialize_toUpdateAttributes(); 
                                                       toUpdateTeamEffects = true; characterEffects[charID].toUpdate = true;
                                                       update_constellation_desc();};
     for(let constellation of Object.keys(char.constellationEffects)){ 
