@@ -3,6 +3,7 @@
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
 // 当角色Effect返回的 buff 是羽毛时，需要额外返回五个参数：
 //    singleFlatDMG: 单次羽毛的增益，hitnum：技能段数，repetitionCount: 重复次数，consumption：羽毛消耗数（无限次数为null），remaining：剩余次数（无限则为null）
+// 角色的 talentMeta 可以有额外变量 constellation，表示命座要求
 
 /* 模板文件
 const template = {
@@ -263,6 +264,8 @@ export const Vesna = {
   variables : {addedPoiseStacks : 0, },  // 在后续buff计算中需要用到的全局参数，定义在这里
   /*... 方法 ...*/
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
+
+
 };
 // 效果函数, 输入为(初始面板，净面板(计算全buff)/初始面板(计算净面板)/{}(计算永久buff), action(行为，可以为空对象), activated(bool值，是否无条件生效))
 function passive_talent_1_1_of_Vesna(teamInitialAttributes, teamNetAttributes, action, activated = false){
@@ -668,10 +671,10 @@ export const Vodyanitsa = {
           isNet : true, isPermanent:true, desc:"沃雅妮莎命座5：沃雅妮莎的元素爆发等级+3"}],
     6 : [{ID:"Vodyanitsa_Constellation6_1", condition:{}, effect:constellation_6_1_of_Vodyanitsa,
           isNet : true, isPermanent:true, desc:"沃雅妮莎命座6：沃雅妮莎2命效果可以作用于全队"},
-          {ID:"Vodyanitsa_Constellation6_2", condition:{rxndmgs:["directStellarSwirl", "reactionStellarSwirl"], elements:["cryo", "anemo"], isStellarSwirl:true}, 
+          {ID:"Vodyanitsa_Constellation6_2", condition:{rxndmgs:["directStellarSwirl", "reactionStellarSwirl"], elements:["cryo", "anemo"], isStellarSwirl:true, VodyanitsaC2Onfield:false}, 
           effect:constellation_6_2_of_Vodyanitsa, isNet : true, isPermanent:false, 
           desc:"沃雅妮莎命座6：处于星扩散状态时，全队角色的星扩散反应伤害的暴击伤害提升60%"},
-          {ID:"Vodyanitsa_Constellation6_3", condition:{elements:["hydro", "cryo"], isStellarSwirl:false}, 
+          {ID:"Vodyanitsa_Constellation6_3", condition:{elements:["hydro", "cryo"], isStellarSwirl:false, VodyanitsaC2Onfield:false}, 
           effect:constellation_6_3_of_Vodyanitsa, isNet : true, isPermanent:false, 
           desc:"沃雅妮莎命座6：不处于星扩散状态时，全队角色的水、冰元素伤害的暴击伤害提升50%"},
           {ID:"Vodyanitsa_Constellation6_4", condition:{}, effect:constellation_6_4_of_Vodyanitsa,
@@ -953,7 +956,7 @@ const TravelerCryo = {
   },
   constellation : 6,
   displayedStats : ["cr", "cd", "atk", "em", "def", "hp", "er", "stellarConductDMG", "stellarSwirlDMG"],
-  effectiveSubStats : {"er":1, "atkp":1, "cr":1, "cd":1, "em":0.5, "atkf":0.33},
+  effectiveSubStats : {"atkp":1, "cr":1, "cd":1, "em":0.5, "er":0.5, "atkf":0.33},
   get effectiveSubStatCount(){
     let count = 0;
     for(let slot of Object.keys(this.artifacts)){
@@ -965,9 +968,9 @@ const TravelerCryo = {
     return count;
   },
   base : {  
-    90 : {atk: 196, def: 628, hp: 9570,},
-    95 : {atk: 222, def: 650, hp: 9901,},
-    100 : {atk: 247, def: 671, hp: 10232,},
+    90 : {atk: 212, def: 683, hp: 10875,},
+    95 : {atk: 239, def: 706, hp: 11251,},
+    100 : {atk: 267, def: 730, hp: 11627,},
   },
   talentLevels : {A : 10, E : 10, Q : 10, other : 1},
   talentMetas : {
@@ -975,6 +978,10 @@ const TravelerCryo = {
             element:null, gauge:0, EACount:0, rxndmg:"none", talent:"other",
             attackType:"swap", isOnfield:true, isSnapshot:false,
             hitnum:0, scaling:null},
+    a1_cryo : {ID : "swap", characterID : "Traveler", name : "普通攻击1·冰",
+               element:"cryo", gauge:1, EACount:1, rxndmg:"none", talent:"other",
+               attackType:"attack", isOnfield:true, isSnapshot:false,
+               hitnum:1, scaling:{10:{atk:0.876}, 13:{atk:1.065}}},
   },
   effects : [
     {ID:"Traveler_Passive1", condition:{}, effect:"", isNet:true, isPermanent:false,
