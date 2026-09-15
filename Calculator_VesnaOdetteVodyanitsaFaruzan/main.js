@@ -125,10 +125,10 @@ function check_character_selection(){
 };
 
 const additionalAttributeParams = {
-    Vesna : {ThrillingTalesofDragonSlayersTarget:true},
-    Odette : {},
-    Vodyanitsa : {},
-    Faruzan : {},
+    Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true},
+    Odette : {toCastE:true, toCastQ:false},
+    Vodyanitsa : {toCastE:true, toCastQ:false},
+    Faruzan : {toCastE:true, toCastQ:true},
 }; 
 
 const characters = {"Vesna":Vesna, "Odette":Odette, "Vodyanitsa":Vodyanitsa, "Faruzan":Faruzan,}; 
