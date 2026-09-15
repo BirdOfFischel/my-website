@@ -1096,14 +1096,11 @@ function get_character_snapshot_attributes(characterID, action){
   return derive_buffed_character_attributes(teamInitialAttributes[characterID], buff, buffDescs, statBuffDetails);
 }
 function simulate(actionArray, totalTime){
-  
   update_team_cost();
   update_team_effects();
-  initialize_all_attributes();
-  for(let char of Object.values(characters)){
-    char.reset_variables(teamInitialAttributes[char.ID]);   
-  }
+  initialize_toUpdateAttributes();
   onfieldCharacterID = null;
+  initialize_all_attributes();
   let n_action = actionArray.length;
   const results = []; 
   const damages = [];
