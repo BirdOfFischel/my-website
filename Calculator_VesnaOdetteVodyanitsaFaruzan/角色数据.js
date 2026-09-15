@@ -243,9 +243,9 @@ export const Vesna = {
     0 : [], // 占位
     1 : [{ID:"Vesna_Constellation1", condition:{characterIDs:["Vesna"], }, effect:constellation_1_of_Vesna,
           isNet : true, isPermanent:true, desc:"薇斯纳命座1：薇斯纳的星扩散伤害增加20%"}],
-    2 : [{ID:"Vesna_Constellation2_1", condition:{characterIDs:["Vesna"], isOnfield:true}, effect:constellation_2_1_of_Vesna,
+    2 : [{ID:"Vesna_Constellation2_1", condition:{characterIDs:["Vesna"],}, effect:constellation_2_1_of_Vesna,
           isNet : true, isPermanent:true, desc:"薇斯纳命座2：薇斯纳的初始整肃层数为6"},
-          {ID:"Vesna_Constellation2_1", condition:{characterIDs:["Vesna"], isOnfield:true}, effect:constellation_2_2_of_Vesna,
+          {ID:"Vesna_Constellation2_2", condition:{characterIDs:["Vesna"], isOnfield:true}, effect:constellation_2_2_of_Vesna,
           isNet : true, isPermanent:false, desc:"薇斯纳命座2：薇斯纳的攻击力提升40%"},
         ],
     3 : [{ID:"Vesna_Constellation3", condition:{characterIDs:["Vesna"], }, effect:constellation_3_of_Vesna,
