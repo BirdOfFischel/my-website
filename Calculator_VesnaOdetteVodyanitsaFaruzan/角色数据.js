@@ -1,6 +1,8 @@
 // 角色数据库：角色数据、角色效果函数，以及默认武器/圣遗物实例装配
 // 由原 HTML 内联 script 拆分而来；保持原有全局类名/变量名/函数名不变。
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
+// 当角色Effect返回的 buff 是羽毛时，需要额外返回五个参数：
+//    singleFlatDMG: 单次羽毛的增益，hitnum：技能段数，repetitionCount: 重复次数，consumption：羽毛消耗数（无限次数为null），remaining：剩余次数（无限则为null）
 
 /* 模板文件
 const template = {
@@ -142,7 +144,9 @@ export const Vesna = {
     },
   },
   constellation : 0, // 命座数，默认为0
-  displayedStats : ["cr", "cd", "atk", "em", "def", "hp", "er", "stellarSwirlDMG", "anemoDeRes", "stellarSwirlElevation"], // 需要展示的词条
+  displayedStats : ["cr", "cd", "atk", "em", "def", "hp", "er", "stellarSwirlDMG", "anemoDeRes", "stellarSwirlElevation",
+                    "flatDMG", "anemoDMG",
+                    ], // 需要展示的词条
   effectiveSubStats : {"atkp":1, "cr":1, "cd":1, "em":1, "er":0.5, "atkf":0.33},//推荐的副词条和他的权重
   get effectiveSubStatCount(){ // 有效词条个数
     let count = 0;
@@ -631,16 +635,16 @@ export const Vodyanitsa = {
       desc:"沃雅妮莎固有天赋1：星扩散状态下，减风抗35%"},
     {ID:"Vodyanitsa_Passive2_1", condition:{isOnfield:true, isStellarSwirl:true, rxndmgs:["directStellarSwirl", "reactionStellarSwirl"], check:check_solo_of_Vodyanitsa},
       effect:passive_talent_2_1_of_Vodyanitsa, isNet:false, isPermanent:false,
-      desc:"沃雅妮莎固有天赋2：提供25层领唱，对于前台角色，基于生命值上限超过40000的部分，每1000点能使星扩散状态下的星扩散反应伤害提升260点(上限6500)"},
+      desc:"沃雅妮莎固有天赋2领唱：提供25层领唱，对于前台角色，基于生命值上限超过40000的部分，每1000点能使星扩散状态下的星扩散反应伤害提升260点(上限6500)"},
     {ID:"Vodyanitsa_Passive2_2", condition:{isOnfield:true, isStellarSwirl:false, elements:["hydro", "cryo"], check:check_solo_of_Vodyanitsa},
       effect:passive_talent_2_2_of_Vodyanitsa, isNet:false, isPermanent:false,
-      desc:"沃雅妮莎固有天赋2：提供25层领唱，对于前台角色，基于生命值上限超过40000的部分，每1000点能使非星扩散状态下的水、冰元素伤害提升140点(上限3500)"},
+      desc:"沃雅妮莎固有天赋2领唱：提供25层领唱，对于前台角色，基于生命值上限超过40000的部分，每1000点能使非星扩散状态下的水、冰元素伤害提升140点(上限3500)"},
     {ID:"Vodyanitsa_Passive2_3", condition:{isOnfield:false, isStellarSwirl:true, rxndmgs:["directStellarSwirl", "reactionStellarSwirl"], check:check_ensemble_of_Vodyanitsa},
       effect:passive_talent_2_3_of_Vodyanitsa, isNet:false, isPermanent:false,
-      desc:"沃雅妮莎固有天赋2：提供10层重唱，对于后台角色，基于生命值上限超过40000的部分，每1000点能使星扩散状态下的星扩散反应伤害提升260点(上限6500)"},
+      desc:"沃雅妮莎固有天赋2重唱：提供10层重唱，对于后台角色，基于生命值上限超过40000的部分，每1000点能使星扩散状态下的星扩散反应伤害提升260点(上限6500)"},
     {ID:"Vodyanitsa_Passive2_4", condition:{isOnfield:false, isStellarSwirl:false, elements:["hydro", "cryo"], check:check_ensemble_of_Vodyanitsa},
       effect:passive_talent_2_4_of_Vodyanitsa, isNet:false, isPermanent:false,
-      desc:"沃雅妮莎固有天赋2：提供10层重唱，对于后台角色，基于生命值上限超过40000的部分，每1000点能使非星扩散状态下的水、冰元素伤害提升140点(上限3500)"},
+      desc:"沃雅妮莎固有天赋2重唱：提供10层重唱，对于后台角色，基于生命值上限超过40000的部分，每1000点能使非星扩散状态下的水、冰元素伤害提升140点(上限3500)"},
     {ID:"Vodyanitsa_EEffect", condition:{},
       effect:E_effect_of_Vodyanitsa, isNet:true, isPermanent:false,
       get desc(){return `沃雅妮莎E效果：给敌人30%(10级E)或35.4%(13级E)的水、冰元素抗性降低`}},
@@ -683,11 +687,22 @@ export const Vodyanitsa = {
 };
 // 角色效果
 function check_solo_of_Vodyanitsa(teamInitialAttributes, charID, action){
-  return teamInitialAttributes["Vodyanitsa"].isSoloExhaust ? false : true;
+  // 检查action是否是前台角色触发，以及领唱是否消耗完毕
+  let actionCharID = (action.talentMeta != undefined) ? action.talentMeta.characterID : null;
+  let isOnfield = (action.talentMeta != undefined) ? action.talentMeta.isOnfield : false;
+  let result = true;
+  if(actionCharID !== charID || isOnfield !== true){result = false;}
+  else{result = teamInitialAttributes["Vodyanitsa"].isSoloExhaust ? false : true;}
+  return result
 };
 function check_ensemble_of_Vodyanitsa(teamInitialAttributes, charID, action){
-  let ID = (action.talentMeta != undefined) ? action.talentMeta.ID || charID : charID;
-  return (teamInitialAttributes["Vodyanitsa"].isEnsembleExhaust || charID !== ID) ? false : true;
+  // 检查action是否是后台角色触发，以及重唱是否消耗完毕
+  let actionCharID = (action.talentMeta != undefined) ? action.talentMeta.characterID : null;
+  let isOnfield = (action.talentMeta != undefined) ? action.talentMeta.isOnfield : null;
+  let result = true;
+  if(actionCharID !== charID || isOnfield !== false){result = false;}
+  else{result = teamInitialAttributes["Vodyanitsa"].isEnsembleExhaust ? false : true;}
+  return result
 };
 function passive_talent_1_of_Vodyanitsa(teamInitialAttributes, teamNetAttributes, action, activated = false){return {anemoDeRes:0.35}};
 function passive_talent_2_1_of_Vodyanitsa(teamInitialAttributes, teamNetAttributes, action, activated = false){
@@ -701,7 +716,8 @@ function passive_talent_2_1_of_Vodyanitsa(teamInitialAttributes, teamNetAttribut
   let currSolo = teamInitialAttributes["Vodyanitsa"].currSolo;
   let times = Math.min(currSolo, hitnum*repetitionCount);
   teamInitialAttributes["Vodyanitsa"].currSolo -= times;
-  const result = {flatDMG: flatDMG*times};
+  const result = {flatDMG: flatDMG*times, singleFlatDMG:flatDMG, hitnum, repetitionCount, 
+                  consumption:times, remaining:teamInitialAttributes["Vodyanitsa"].currSolo};
   if(teamInitialAttributes["Vodyanitsa"].currSolo === 0){teamInitialAttributes["Vodyanitsa"].isSoloExhaust = true};
   return result;
 };
@@ -716,7 +732,8 @@ function passive_talent_2_2_of_Vodyanitsa(teamInitialAttributes, teamNetAttribut
   let currSolo = teamInitialAttributes["Vodyanitsa"].currSolo;
   let times = Math.min(currSolo, hitnum*repetitionCount);
   teamInitialAttributes["Vodyanitsa"].currSolo -= times;
-  const result = {flatDMG: flatDMG*times};
+  const result = {flatDMG: flatDMG*times, singleFlatDMG:flatDMG, hitnum, repetitionCount, 
+                  consumption:times, remaining:teamInitialAttributes["Vodyanitsa"].currSolo};
   if(teamInitialAttributes["Vodyanitsa"].currSolo === 0){teamInitialAttributes["Vodyanitsa"].isSoloExhaust = true};
   return result;
 };
@@ -731,7 +748,8 @@ function passive_talent_2_3_of_Vodyanitsa(teamInitialAttributes, teamNetAttribut
   let currEnsemble = teamInitialAttributes["Vodyanitsa"].currEnsemble;
   let times = Math.min(currEnsemble, hitnum*repetitionCount);
   teamInitialAttributes["Vodyanitsa"].currEnsemble -= times;
-  const result = {flatDMG: flatDMG*times};
+  const result = {flatDMG: flatDMG*times, singleFlatDMG:flatDMG, hitnum, repetitionCount, 
+                  consumption:times, remaining:teamInitialAttributes["Vodyanitsa"].currEnsemble};
   if(teamInitialAttributes["Vodyanitsa"].currEnsemble === 0){teamInitialAttributes["Vodyanitsa"].isEnsembleExhaust = true};
   return result;
 };
@@ -746,7 +764,8 @@ function passive_talent_2_4_of_Vodyanitsa(teamInitialAttributes, teamNetAttribut
   let currEnsemble = teamInitialAttributes["Vodyanitsa"].currEnsemble;
   let times = Math.min(currEnsemble, hitnum*repetitionCount);
   teamInitialAttributes["Vodyanitsa"].currEnsemble -= times;
-  const result = {flatDMG: flatDMG*times};
+  const result = {flatDMG: flatDMG*times, singleFlatDMG:flatDMG, hitnum, repetitionCount, 
+                  consumption:times, remaining:teamInitialAttributes["Vodyanitsa"].currEnsemble};
   if(teamInitialAttributes["Vodyanitsa"].currEnsemble === 0){teamInitialAttributes["Vodyanitsa"].isEnsembleExhaust = true};
   return result;
 };
@@ -851,8 +870,8 @@ function constellation_6_4_of_Vodyanitsa(teamInitialAttributes, teamNetAttribute
       get desc(){return `珐露珊Q祈风之赐：为全队提供32.4%(10级Q)或38.3%(13级Q)风元素伤害加成`}},
       {ID:"Faruzan_QDeRes", condition:{}, effect:Q_de_res_effect_of_Faruzan, isNet:true, isPermanent:false,
       desc:"珐露珊Q诡风之祸：烈风波降低敌人30%风元素抗性(简化为全程生效)"},
-      {ID:"Faruzan_A4", condition:{elements:["anemo"], isOnfield:true, excludedRxndmgs:["directStellarSwirl", "reactionStellarSwirl"]}, 
-      effect:passive_talent_4_of_Faruzan, isNet:false, isPermanent:false,
+      {ID:"Faruzan_Passive2", condition:{elements:["anemo"], isOnfield:true, excludedRxndmgs:["directStellarSwirl", "reactionStellarSwirl"]}, 
+      effect:passive_talent_2_of_Faruzan, isNet:false, isPermanent:false,
       desc:"珐露珊固有天赋2：处于祈风之赐下的前台角色造成风元素伤害时，基于珐露珊基础攻击力的32%提高伤害"},
     ],
     constellationEffects : {
@@ -883,19 +902,101 @@ function constellation_6_4_of_Vodyanitsa(teamInitialAttributes, teamNetAttribute
     // 诡风之祸：烈风波命中后降低敌人30%风抗(本模板简化为全程生效)
     return {anemoDeRes : 0.30};
   };
-  function passive_talent_4_of_Faruzan(teamInitialAttributes, teamNetAttributes, action, activated = false){
+  function passive_talent_2_of_Faruzan(teamInitialAttributes, teamNetAttributes, action, activated = false){
     // 七窟遗智：基于珐露珊基础攻击力的32%提高前台角色风元素伤害(固定值加成); 所有固定值加成都要考虑talentMeta的攻击段数 hitnum 和action的重数 repetitionCount
     const batk = teamNetAttributes["Faruzan"].stats.batk;
     const hitnum = (action.talentMeta != undefined) ? action.talentMeta.hitnum||1 : 1;
     const repetitionCount = action.repetitionCount || 1;
-    return {flatDMG : batk * 0.32 * repetitionCount * hitnum};
+    const singleFlatDMG = batk * 0.32;
+    return {flatDMG : singleFlatDMG * repetitionCount * hitnum, singleFlatDMG, hitnum, repetitionCount, 
+            consumption:null, remaining:null};
   };
   
   // #endregion
 
 
 // #region 冰旅行者数据
-
+const TravelerCryo = {
+  name : "旅行者·冰",
+  rarity: 0,
+  ID : "TravelerCryo",
+  element : "cryo",
+  level : 90,
+  stat: "atkp", // 突破属性词条
+  statValue : 0.24, // 突破属性数值
+  statLabel : "攻击力%",
+  weapon : null,
+  candidateWeapons : {},
+  artifactSet : [],
+  candidateArtifactSets : {},
+  artifacts: { // 默认词条：辅助向，优先充能
+    flower : {
+      mainStat : "hpf",
+      subStats : {"cr":2, "cd":3, "atkp":2, "defp":0, "hpp":0, "em":0, "er":1, "atkf":0, "deff":0, "hpf":0},
+    },
+    plume : {
+      mainStat : "atkf",
+      subStats : {"cr":2, "cd":3, "atkp":2, "defp":0, "hpp":0, "em":0, "er":1, "atkf":0, "deff":0, "hpf":0},
+    },
+    sands : {
+      mainStat : "atkp",
+      subStats : {"cr":3, "cd":3, "atkp":0, "defp":0, "hpp":0, "em":0, "er":1, "atkf":1, "deff":0, "hpf":0},
+    },
+    goblet : {
+      mainStat : "atkp",
+      subStats : {"cr":2, "cd":3, "atkp":0, "defp":0, "hpp":0, "em":2, "er":1, "atkf":0, "deff":0, "hpf":0},
+    },
+    circlet : {
+      mainStat : "cr",
+      subStats : {"cr":0, "cd":4, "atkp":2, "defp":0, "hpp":0, "em":0, "er":1, "atkf":1, "deff":0, "hpf":0},
+    },
+  },
+  constellation : 6,
+  displayedStats : ["cr", "cd", "atk", "em", "def", "hp", "er", "stellarConductDMG", "stellarSwirlDMG"],
+  effectiveSubStats : {"er":1, "atkp":1, "cr":1, "cd":1, "em":0.5, "atkf":0.33},
+  get effectiveSubStatCount(){
+    let count = 0;
+    for(let slot of Object.keys(this.artifacts)){
+      const substats = this.artifacts[slot].subStats;
+      for(let stat of Object.keys(substats)){
+        count += (this.effectiveSubStats[stat] || 0) * substats[stat];
+      }
+    }
+    return count;
+  },
+  base : {  
+    90 : {atk: 196, def: 628, hp: 9570,},
+    95 : {atk: 222, def: 650, hp: 9901,},
+    100 : {atk: 247, def: 671, hp: 10232,},
+  },
+  talentLevels : {A : 10, E : 10, Q : 10, other : 1},
+  talentMetas : {
+    swap : {ID : "swap", characterID : "Traveler", name : "切换角色",
+            element:null, gauge:0, EACount:0, rxndmg:"none", talent:"other",
+            attackType:"swap", isOnfield:true, isSnapshot:false,
+            hitnum:0, scaling:null},
+  },
+  effects : [
+    {ID:"Traveler_Passive1", condition:{}, effect:"", isNet:true, isPermanent:false,
+    get desc(){return ``}},
+  ],
+  constellationEffects : {
+    0 : [],
+    1 : [],
+    2 : [],
+    3 : [{ID:"Traveler_Constellation3", condition:{characterIDs:["Faruzan"]}, effect:()=>({E:3}),
+          isNet:true, isPermanent:true, desc:""}],
+    4 : [],
+    5 : [{ID:"Traveler_Constellation5", condition:{characterIDs:["Faruzan"]}, effect:()=>({Q:3}),
+          isNet:true, isPermanent:true, desc:""}],
+    6 : [{ID:"Traveler_Constellation6", condition:{elements:["anemo"]}, effect:()=>({cd:0.40}),
+          isNet:true, isPermanent:false, desc:""}],
+  },
+  parameters : {},
+  teamParameters : {},
+  variables : {},
+  reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
+}
 
 
 

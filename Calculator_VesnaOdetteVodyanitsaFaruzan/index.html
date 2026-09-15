@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>原神固定配队、固定流程拉表文件</title>
+  <title>原神薇斯纳固定配队、固定流程拉表</title>
   <style>
   :root {
     --bg: #0f1420; --panel: #1a2233; --panel2: #232e45; --line: #33415c; --part:#151b2a;
     --txt: #e8edf6; --dim: #93a0b8; --acc: #6fd3ff; --good: #7ee0a0;
-    --dropped : #3d444e;
+    --dropped : #3d444e; --boxbg:#141a27;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--txt); font: 15px/1.55 "Segoe UI", "Microsoft YaHei", sans-serif; padding: 24px; }
@@ -25,7 +25,8 @@
   .hidden {display : none}
   .grid { display: grid; grid-template-columns: 1.3fr 0.9fr; gap: 16px; max-width: 1500px; margin: 0 auto; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-  .part {background:var(--part); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;}
+  .part {background:var(--part); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; 
+         max-width: 1500px; align-items: center;}
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
   .card h2 { font-size: 14px; color: var(--acc); margin-bottom: 10px; }
   .name_input_desc {display: grid; grid-template-columns: 110px 0.2fr 0.8fr; gap: 6px; align-items: center; padding: 8px 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); margin-top: 6px;}
@@ -102,10 +103,26 @@
   .result-display span {color:var(--txt); font-size:18px; margin:0; line-height: 1; font-weight: bold;}
   .result-display-box { background: #232e45; border: 1px solid #d4af37; border-radius: 6px;
                         padding: 6px 10px; font-size: 18px; font-weight: 700; color: #d1b411; white-space: nowrap; }
-
-
-
-
+  /* 角色选择 */
+  .char-select-part {display: grid; grid-template-columns: 0.9fr 1.0fr; gap: 16px; max-width: 1500px; margin: 0 auto;}
+  .char-select-candidate {display:flex; align-items: flex-start; gap: 6px; width: auto; margin: 10px; flex-wrap: wrap; 
+                          background: var(--boxbg); min-height: 200px;}
+  .char-select-result {display:flex; flex-direction: column; gap: 8px; width: auto; margin:10px 2px 20px;}
+  .char-select-h1-row {display: grid; grid-template-columns: 150px 1fr; gap: 1px; align-items: center; padding: 8px 3px; border: 1px solid var(--line); 
+                       border-radius: 10px; background: var(--boxbg); margin-top: 1px; height: 90px;}
+  .char-select-h1-row h1 {margin: 0px; text-align: center;}
+  .char-select-row {display:flex; align-items: flex-start; gap:10px}
+  .errdesc-btn {display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;}
+  .charbox {width: 100px; height: 50px; background-color: #ddd; color:#000; font-size: 14px; font-weight: bold;
+      border: 2px solid #999; border-radius: 6px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; user-select: none;             /* 防止连点选中文字 */
+      transition: background-color 0.2s, border-color 0.2s; }
+  .charbox.selected {background-color: #4caf50; border-color: #2e7d32; color: #fff;}
+  .charbox2 {width: 100px; height: 50px; background-color: #1a2233; color: #fff; font-size: 14px; font-weight: bold;
+      border: 2px solid #d4af37; border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; user-select: none;             /* 防止连点选中文字 */
+      }
+  .error-text {color : #a40505; font-size:8pt; margin:0}
 
   </style>
 
@@ -136,6 +153,7 @@
 </div>
 
 <!-- 角色配置部分 -->
+<div class="part hidden" id="character_selection_part" ></div>
 <div class="grid">
   <div class="part" id="character_build_part">
   </div>

@@ -1,7 +1,7 @@
 // 圣遗物套装数据库：套装类与套装效果函数
 // 由原 HTML 内联 script 拆分而来；保持原有全局类名/变量名/函数名不变。
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
-
+// 圣遗物的效果中可能具有参数 isOnly，表示这个效果全局唯一（即同类圣遗物效果只生效一个）
 
 export class ArtifactSet_ScarletProof{ // 血红之证
   constructor(ID = "ScarletProof", equipperID=undefined, equipperName=equipperID){
@@ -11,10 +11,10 @@ export class ArtifactSet_ScarletProof{ // 血红之证
     this.equipperID = equipperID;
     this.equipperName = equipperName;
     this.setEffects = {
-      2 : [{ID:"ScarletProof_Piece_2", condition:{characterIDs:[this.equipperID], }, effect:piece_2_of_ScarletProof,
+      2 : [{ID:this.ID+"_Piece_2", condition:{characterIDs:[this.equipperID], }, effect:piece_2_of_ScarletProof,
             isNet : true, isPermanent:true, 
             get desc(){return `血红之证二件套：提升装备者${self.equipperName}18%攻击力`}}],
-      4 : [{ID:"ScarletProof_Piece_4", condition:{characterIDs:[this.equipperID], isOnfield:true}, effect:piece_4_of_ScarletProof,
+      4 : [{ID:this.ID+"_Piece_4", condition:{characterIDs:[this.equipperID], isOnfield:true}, effect:piece_4_of_ScarletProof,
             isNet : true, isPermanent:false, 
             get desc(){return `血红之证四件套：提升装备者${self.equipperName}16%暴击率和40%星扩散增伤`}}],
     };
@@ -47,13 +47,13 @@ export class ArtifactSet_HeartoftheFurnace { // 炉火融炼之心
     this.equipperID = equipperID;
     this.equipperName = equipperName;
     this.setEffects = {
-      2: [{ID: "HeartoftheFurnace_Piece_2", condition: {characterIDs: [this.equipperID]}, effect: piece_2_of_HeartoftheFurnace,
-          isNet: true, isPermanent: true,
+      2: [{ID: this.ID+"_Piece_2", condition: {characterIDs: [this.equipperID]}, effect: piece_2_of_HeartoftheFurnace,
+          isNet: true, isPermanent: true, 
           get desc() {return `炉火融炼之心二件套：提升装备者${self.equipperName}18%攻击力`}}],
-      4: [{ID: "HeartoftheFurnace_Piece_4_1", condition: {characterIDs: [this.equipperID]}, effect: piece_4_1_of_HeartoftheFurnace,
-          isNet: true, isPermanent: false,
+      4: [{ID: this.ID+"_Piece_4_1", condition: {characterIDs: [this.equipperID]}, effect: piece_4_1_of_HeartoftheFurnace,
+          isNet: true, isPermanent: false, isOnly:true, // 表示效果唯一
           get desc() {return `炉火融炼之心四件套：提升装备者${self.equipperName}12%攻击力`}},
-          {ID: "HeartoftheFurnace_Piece_4_2", condition: {}, effect: piece_4_2_of_HeartoftheFurnace,
+          {ID: this.ID+"_Piece_4_2", condition: {}, effect: piece_4_2_of_HeartoftheFurnace,
           isNet: true, isPermanent: false,
           desc: "炉火融炼之心四件套：全队星烁反应伤害提升50%"}],
     };
@@ -87,11 +87,11 @@ export class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
     this.equipperID = equipperID;
     this.equipperName = equipperName;
     this.setEffects = {
-      2: [{ID: "TenacityoftheMillelith_Piece_2", condition: {characterIDs: [this.equipperID]}, effect: piece_2_of_TenacityoftheMillelith,
+      2: [{ID: this.ID+"_Piece_2", condition: {characterIDs: [this.equipperID]}, effect: piece_2_of_TenacityoftheMillelith,
           isNet: true, isPermanent: true,
           get desc() {return `千岩牢固二件套：提升装备者${self.equipperName}20%的最大生命值`}}],
-      4: [{ID: "TenacityoftheMillelith_Piece_4", condition: {}, effect: piece_4_of_TenacityoftheMillelith,
-          isNet: true, isPermanent: false,
+      4: [{ID: this.ID+"_Piece_4", condition: {}, effect: piece_4_of_TenacityoftheMillelith,
+          isNet: true, isPermanent: false, isOnly:true,
           get desc() {return `千岩牢固四件套：提升全体角色20%攻击力和30%护盾强效`}},
           ],
     };
@@ -124,11 +124,11 @@ export class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
     this.equipperID = equipperID;
     this.equipperName = equipperName;
     this.setEffects = {
-      2 : [{ID:"NoblesseOblige_Piece_2", condition:{characterIDs:[this.equipperID], attackTypes:["burst"]}, effect:piece_2_of_NoblesseOblige,
+      2 : [{ID:this.ID+"_Piece_2", condition:{characterIDs:[this.equipperID], attackTypes:["burst"]}, effect:piece_2_of_NoblesseOblige,
             isNet : true, isPermanent:false,
             get desc(){return `昔日宗室之仪二件套：提升装备者${self.equipperName}20%元素爆发伤害`}}],
-      4 : [{ID:"NoblesseOblige_Piece_4", condition:{}, effect:piece_4_of_NoblesseOblige,
-            isNet : true, isPermanent:false,
+      4 : [{ID:this.ID+"_Piece_4", condition:{}, effect:piece_4_of_NoblesseOblige,
+            isNet : true, isPermanent:false, isOnly:true,
             desc:"昔日宗室之仪四件套：施放元素爆发后，队伍中所有角色攻击力提升20%，持续12秒"}],
     };
     this.parameters = {};

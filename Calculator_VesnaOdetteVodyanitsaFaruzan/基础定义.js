@@ -70,10 +70,12 @@ export const STATS = {
     // 异化剧变反应擢升
     lunarChargedElevation : "月感电擢升", lunarBloomElevation : "月绽放擢升", lunarCrystallizeElevation : "月结晶擢升",
     stellarConductElevation : "星超导擢升", stellarSwirlElevation : "星扩散擢升",
-    // 固定数值伤害加成（羽毛）和倍率乘数（大权）
-    flatDMG : "固定数值伤害加成", baseDMGMult: "倍率乘数", 
+    // 额外伤害加成（羽毛）和倍率乘数（大权）
+    flatDMG : "额外伤害加成", baseDMGMult: "倍率乘数", 
     // 剧变反应伤害基数(等级系数)
     levelMult : "等级系数",
+    // 其他：包括减CD
+    CDReduction : "减CD",
 }
 export const STAT_KEY_SET = new Set(Object.keys(STATS)); // 词条的key，需要扣除atk、def和hp三个
 ["atk", "def", "hp"].forEach(item => STAT_KEY_SET.delete(item));

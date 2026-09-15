@@ -304,7 +304,7 @@ export class Weapon_HymnoftheMaelstrom {// 法器：漩流颂歌
                           触发冻结反应或星扩散反应时生命值加成效果额外提高75%`}},
       {ID: this.ID + "_Effect_2", condition: {isOnfield:true},
         effect: (teamInitAttr, teamAttr, action, activated = false) => effect_2_of_weapon_HymnoftheMaelstrom(teamInitAttr, teamAttr, action, this, activated),
-        isNet: false, isPermanent: false,
+        isNet: false, isPermanent: false, isOnly:true,
         get desc() {return `漩流颂歌效果2：装备者${self.equipperName}生命值超过40000的部分，每1000点提升场上角色${0.9 + self.rank * 0.3}%
                             的攻击力加成，至多${18+6*self.rank}%，触发冻结反应或星扩散反应时效果额外提高75%`}},
     ];
@@ -351,7 +351,7 @@ export class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
     this.effects = [
       {ID: this.ID + "_Effect", condition: {check:check_effect_of_weapon_ThrillingTalesofDragonSlayers},
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_of_weapon_ThrillingTalesofDragonSlayers(teamInitAttr, teamAttr, action, this, activated),
-      isNet: true, isPermanent: false,
+      isNet: true, isPermanent: false, isOnly:true,
       get desc() {return `讨龙英杰谭效果：切换角色时，提升下一个登场角色${18 + self.rank * 6}%的攻击力`}},
     ];
     this.parameters = {}; // 自己效果要用的参数
@@ -395,11 +395,11 @@ export class Weapon_BreezeborneRefrain{ // 弓：柔风游弦
     this.effects = [
       {ID: this.ID + "_Effect_1", condition: {characterIDs:[this.equipperID]},
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_1_of_weapon_BreezeborneRefrain(teamInitAttr, teamAttr, action, this, activated),
-      isNet: true, isPermanent: false,
+      isNet: true, isPermanent: true,
       get desc() {return `柔风游弦效果1：给装备者${self.equipperName}${15 + self.rank * 5}%的元素充能效率提升`}},
       {ID: this.ID + "_Effect_2", condition: {},
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_2_of_weapon_BreezeborneRefrain(teamInitAttr, teamAttr, action, this, activated),
-      isNet: true, isPermanent: false,
+      isNet: true, isPermanent: false, isOnly:true,
       get desc() {return `柔风游弦效果2：给全队${18 + self.rank * 6}%的星烁反应伤害加成`}},
     ];
     this.parameters = {}; // 自己效果要用的参数
