@@ -24,6 +24,7 @@ import {
   Weapon_NewBough,
   Weapon_SliverLight,
   Weapon_FinaleoftheDeep,
+  Weapon_HereticsMoltenBlade,
 } from "./武器数据.js";
 import {
   ArtifactSet_ScarletProof,
@@ -44,10 +45,10 @@ const WhitelakeFrostfeather1 = new Weapon_WhitelakeFrostfeather("WhitelakeFrostf
 const NewBough = new Weapon_NewBough();
 const SliverLight = new Weapon_SliverLight();
 const FinaleoftheDeep = new Weapon_FinaleoftheDeep();
-
+const HereticsMoltenBlade = new Weapon_HereticsMoltenBlade();
 const ScarletProof = new ArtifactSet_ScarletProof();
 
-Vesna.candidateWeapons = {BeyondtheChrysalis, ExaiphanesBlade1, WhitelakeFrostfeather1, NewBough, SliverLight, FinaleoftheDeep};
+Vesna.candidateWeapons = {BeyondtheChrysalis, ExaiphanesBlade1, WhitelakeFrostfeather1, NewBough, SliverLight, FinaleoftheDeep, HereticsMoltenBlade};
 Vesna.weapon = BeyondtheChrysalis;
 BeyondtheChrysalis.be_equipped(Vesna.ID, Vesna.name);
 Vesna.candidateArtifactSets.ScarletProof_4 = [[ScarletProof, 4]];

@@ -268,6 +268,49 @@ function effect_2_of_weapon_FinaleoftheDeep(teamInitialAttributes, teamNetAttrib
 }
 
 
+export class Weapon_HereticsMoltenBlade{// 单手剑：熔猎异端之刃
+  constructor(ID = "HereticsMoltenBlade", rank=5, equipperID=undefined, equipperName=equipperID){
+    const self = this;
+    this.ID = ID;
+    this.name = "熔猎异端之刃";
+    this.rarity = 4;
+    this.batk = 510;
+    this.stat = "cr";
+    this.statLabel = "暴击率";
+    this.statValue = 0.276;
+    this.rank = rank;
+    this.equipperID = equipperID;
+    this.equipperName = equipperName;
+    this.effects = [
+      {ID: this.ID + "_Effect", condition: {characterIDs:[this.equipperID], isOnfield:true, toCastE:true},
+      effect: (teamInitAttr, teamAttr, action, activated = false) => effect_1_of_weapon_HereticsMoltenBlade(teamInitAttr, teamAttr, action, this, activated),
+      isNet: true, isPermanent: false,
+      get desc() {return `熔猎异端之刃效果：装备者${self.equipperName}释放元素战技后，提升${27+9*self.rank}%的攻击力`}},
+    ];
+    this.parameters = {toCastE:true};
+    this.teamParameters = {};
+    this.variables = {};
+  };
+  be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
+    this.equipperID = equipperID;
+    this.equipperName = equipperName;
+    for (const item of this.effects) {
+      if (item.condition.characterIDs) {
+        item.condition.characterIDs = item.condition.characterIDs.map(id =>
+          id == undefined ? equipperID : id
+        );
+      }
+    }
+  };
+};
+function effect_1_of_weapon_HereticsMoltenBlade(teamInitialAttributes, teamNetAttributes, action, weapon, activated = false){
+  return {atkp:0.27+0.09*weapon.rank}
+}
+
+
+
+
+
 // #endregion
 
 
