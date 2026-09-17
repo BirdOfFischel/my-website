@@ -11,9 +11,11 @@ import {
   ARTIFACT_MAIN_STATS,
   ARTIFACT_SUB_STATS,
   ARTIFACT_SLOTS,
+  FLAT_STAT_SET,
   get_elemental_resonance_effects,
 } from "./基础定义.js";
 import {
+  get_weapon_desc_array,
   Weapon_BeyondtheChrysalis,
   Weapon_ExaiphanesBlade,
   Weapon_WhitelakeFrostfeather,
@@ -27,18 +29,22 @@ import {
   Weapon_HereticsMoltenBlade,
 } from "./武器数据.js";
 import {
+  get_artifactSet_ID, get_artifactSet_name, get_artifactSet_desc_array,
   ArtifactSet_ScarletProof,
   ArtifactSet_HeartoftheFurnace,
   ArtifactSet_TenacityoftheMillelith,
   ArtifactSet_NoblesseOblige,
 } from "./圣遗物套装数据.js";
-import { Vesna, Odette, Vodyanitsa, Faruzan } from "./角色数据.js";
+import { check_action_condition, get_effect_segment_ineffective_ranges,
+  assign_details_to_actions_between_timestamps, EPSILON,
+  assign_detials_to_segment_actions, sort_actions_by_timestamps, sum,
+  Vesna, Odette, Vodyanitsa, Faruzan } from "./角色数据.js";
 
 
 
-
-
-
+// 需要开发者修改的部分
+// #region 薇斯纳（Vesna）
+// 武器部分
 const BeyondtheChrysalis = new Weapon_BeyondtheChrysalis();
 const ExaiphanesBlade1 = new Weapon_ExaiphanesBlade("ExaiphanesBlade1");
 const WhitelakeFrostfeather1 = new Weapon_WhitelakeFrostfeather("WhitelakeFrostfeather1");
@@ -46,72 +52,73 @@ const NewBough = new Weapon_NewBough();
 const SliverLight = new Weapon_SliverLight();
 const FinaleoftheDeep = new Weapon_FinaleoftheDeep();
 const HereticsMoltenBlade = new Weapon_HereticsMoltenBlade();
+// 圣遗物
 const ScarletProof = new ArtifactSet_ScarletProof();
-
+// 调整参数
 Vesna.candidateWeapons = {BeyondtheChrysalis, ExaiphanesBlade1, WhitelakeFrostfeather1, NewBough, SliverLight, FinaleoftheDeep, HereticsMoltenBlade};
 Vesna.weapon = BeyondtheChrysalis;
 BeyondtheChrysalis.be_equipped(Vesna.ID, Vesna.name);
 Vesna.candidateArtifactSets.ScarletProof_4 = [[ScarletProof, 4]];
 Vesna.artifactSet = [[ScarletProof, 4]];
 ScarletProof.be_equipped(Vesna.ID, Vesna.name);
+// #endregion
 
 
-
-
-
+// #region 奥黛塔(Odette)
+// 武器部分
 const ExaiphanesBlade = new Weapon_ExaiphanesBlade();
 const WhitelakeFrostfeather = new Weapon_WhitelakeFrostfeather();
 const NewBough1 = new Weapon_NewBough("NewBough1");
-
+// 圣遗物
 const HeartoftheFurnace = new ArtifactSet_HeartoftheFurnace();
-
+// 赋值
 Odette.candidateWeapons = {WhitelakeFrostfeather, ExaiphanesBlade, NewBough1};
 Odette.weapon = WhitelakeFrostfeather;
 WhitelakeFrostfeather.be_equipped(Odette.ID, Odette.name);
 Odette.candidateArtifactSets = {HeartoftheFurnace_4 : [[HeartoftheFurnace, 4]]};
 Odette.artifactSet = [[HeartoftheFurnace, 4]];
 HeartoftheFurnace.be_equipped(Odette.ID, Odette.name);
+// #endregion
 
 
-
-
-
+// #region 沃雅妮莎(Vodyanitsa)
+// 武器
 const HymnoftheMaelstrom = new Weapon_HymnoftheMaelstrom();
 const ThrillingTalesofDragonSlayers = new Weapon_ThrillingTalesofDragonSlayers();
-
+// 圣遗物套装
 const TenacityoftheMillelith = new ArtifactSet_TenacityoftheMillelith();
-
+// 配置
 Vodyanitsa.candidateWeapons = {HymnoftheMaelstrom, ThrillingTalesofDragonSlayers};
 Vodyanitsa.weapon = HymnoftheMaelstrom;
 HymnoftheMaelstrom.be_equipped(Vodyanitsa.ID, Vodyanitsa.name);
 Vodyanitsa.candidateArtifactSets = {"TenacityoftheMillelith_4":[[TenacityoftheMillelith, 4]]};
 Vodyanitsa.artifactSet = [[TenacityoftheMillelith, 4]];
 TenacityoftheMillelith.be_equipped(Vodyanitsa.ID, Vodyanitsa.name);
+// #endregion
 
 
-
-
-
+// #region 珐露珊(Faruzan)
+// 武器
 const BreezeborneRefrain = new Weapon_BreezeborneRefrain();
 const FavoniusWarbow = new Weapon_FavoniusWarbow();
-
+// 圣遗物套装
 const NoblesseOblige = new ArtifactSet_NoblesseOblige();
-
+// 配置
 Faruzan.candidateWeapons = {BreezeborneRefrain, FavoniusWarbow};
 Faruzan.weapon = BreezeborneRefrain;
 BreezeborneRefrain.be_equipped(Faruzan.ID, Faruzan.name);
 Faruzan.candidateArtifactSets = {NoblesseOblige_4:[[NoblesseOblige, 4]]};
 Faruzan.artifactSet = [[NoblesseOblige, 4]];
 NoblesseOblige.be_equipped(Faruzan.ID, Faruzan.name);
+// #endregion
 
+// 角色选择时的参数
+const candidateCharacters = {"Odette":Odette, "Faruzan":Faruzan,};  // 候选角色
+const selectedCharacters = {};   // 用户选择的角色
+const requiredCharacters = {"Vesna":Vesna, "Vodyanitsa":Vodyanitsa, };   // 需要的角色，默认在队伍中
 
-
-const candidateCharacters = {"Odette":Odette, "Faruzan":Faruzan,};  
-const selectedCharacters = {};   
-const requiredCharacters = {"Vesna":Vesna, "Vodyanitsa":Vodyanitsa, };   
-
-function check_character_selection(){
-  
+function check_character_selection(){// 检查用户选择的角色是否满足要求，比如必须具有哪些属性等
+  // 返回 {isPass, text}, isPass bool值表示是否通过检测，text为不通过时的报错
   let isPass = true, text = "";
   if(Object.keys(selectedCharacters).length +  Object.keys(requiredCharacters).length< 4){isPass = false; text = "角色数目小于4"}
   else{
@@ -124,39 +131,63 @@ function check_character_selection(){
   return {isPass, text};
 };
 
+function get_settings(){
+  let settingsList = [
+    {Vesna: {toCastQ:false, ThrillingTalesofDragonSlayersTarget:false}},
+    {Vesna: {toCastQ:true, ThrillingTalesofDragonSlayersTarget:true}},
+  ];
+  let descList = ["薇斯纳无大，且队伍中可能存在的讨龙不生效", "薇斯纳有大，且队伍中若存在讨龙则生效"];
+  // 判断共计总时间（上面两个设置对应两种不同的情况，总时间不一定是二者相加，比如薇斯纳轴长19秒，但讨龙CD有20.83秒）
+  let getTotalTime = (totalTimes) => {return sum(totalTimes)};
+  for(let char of Object.values(characters)){
+    if(char.weapon.name === "讨龙英杰谭"){getTotalTime = (totalTimes)=>{return 20.83+sum(totalTimes.slice(1))}; break;}
+  }
+  return {settingsList, descList, getTotalTime};
+}
+
+
+
+const characters = {"Vesna":Vesna, "Odette":Odette, "Vodyanitsa":Vodyanitsa, "Faruzan":Faruzan,}; // 队伍中的具体角色角色，一般有四个元素
+
+
+
+
+
+
+
+
+
+// 不需要开发者修改的部分
 const additionalAttributeParams = {
-    Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true},
-    Odette : {toCastE:true, toCastQ:false},
-    Vodyanitsa : {toCastE:true, toCastQ:false},
-    Faruzan : {toCastE:true, toCastQ:true},
-}; 
-
-const characters = {"Vesna":Vesna, "Odette":Odette, "Vodyanitsa":Vodyanitsa, "Faruzan":Faruzan,}; 
-
-
-
-
-
-
+    Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true, order:10000}, // order为角色登场顺序
+    Odette : {toCastE:true, toCastQ:false, order:1},
+    Vodyanitsa : {toCastE:true, toCastQ:false, order:999},
+    Faruzan : {toCastE:true, toCastQ:true, order:100},
+}; // 额外面板参数，会附加给对应角色的初始面板
+const availableCharIDSet = new Set(Object.keys(additionalAttributeParams));
+function update_additionalAttributeParams(settings){
+  for(let charID of Object.keys(settings)){
+    if(availableCharIDSet.has(charID)){Object.assign(additionalAttributeParams[charID], settings[charID])};
+  }
+}
 
 
 
-
-let characterEffects = {}; 
+let characterEffects = {}; // 每个角色的效果
 function initialize_characterEffects(){
   characterEffects = Object.keys(characters).reduce((result, obj) => {
-    result[obj] = {toUpdate:true, dynamic:[], net:[], permanent:[]}; 
+    result[obj] = {toUpdate:true, dynamic:[], net:[], permanent:[]}; // toUpdate: 当用户修改对应角色配置时置为true，表示需要更新，更新后置为false
     return result;
   }, {});
 }
 initialize_characterEffects();
 
-const teamEffects = [], teamNetEffects = [], teamPermanentEffects = [];  
-let toUpdateTeamEffects = true;  
-let teamTotalParameters = {}; 
+const teamEffects = [], teamNetEffects = [], teamPermanentEffects = [];  // 队伍效果（剔除永久）、队伍净效果（剔除永久）、队伍永久效果
+let toUpdateTeamEffects = true;  // 当涉及到角色圣遗物套装变换、武器变化、命座变化时，这个值被置为true，表示队伍效果需要更新
+let teamTotalParameters = {}; // 汇总全队的 teamParameters
 function initialize_teamTotalParameters(){
   teamTotalParameters = {};
-  for(let char of Object.values(characters)){
+  for(let char of Object.values(characters)){// 按角色顺序汇总 teamParameters
     Object.assign(teamTotalParameters, char.weapon.teamParameters);
     Object.assign(teamTotalParameters, char.artifactSet.teamParameters);
     Object.assign(teamTotalParameters, char.teamParameters);
@@ -167,16 +198,16 @@ initialize_teamTotalParameters();
 const teamInitialAttributes = {}, teamNetAttributes = {}, teamSnapshotAttributes = {}, 
       teamCurrentAttributes = {};
 const teamMaxNetAttributes= {}, teamMaxCurrentAttributes = {};
-let toUpdateAttributes = {}; 
+let toUpdateAttributes = {}; // 当角色的配置被修改时，需要修改初始面板，在这里表示
 function initialize_toUpdateAttributes(){
   toUpdateAttributes = Object.keys(characters).reduce((result, ID) => {result[ID]=true; return result;}, {});
 }
 initialize_toUpdateAttributes();
 
 
-
-let onfieldCharacterID = null;  
-let teamCost = 0; 
+// #region 角色面板和效果计算相关
+let onfieldCharacterID = null;  // 前台角色的ID
+let teamCost = 0; // 全队的金数
 function update_team_cost(){
   teamCost = 0;
   for(let char of Object.values(characters)){
@@ -187,7 +218,7 @@ function update_team_cost(){
 function clearObject(obj){
   Object.keys(obj).forEach(key => {delete obj[key];});
 }
-function update_characters(){
+function update_characters(){// 当角色选择开启时使用，根据选择结果更新
   clearObject(teamInitialAttributes);
   clearObject(teamNetAttributes);
   clearObject(teamCurrentAttributes);
@@ -202,39 +233,13 @@ function update_characters(){
   initialize_toUpdateAttributes();
 }
 
-
-function get_artifactSet_ID(artifactSet){
-  const ID = artifactSet.map(([set, number]) => [set.ID, number.toString()]).flat().join("_");
-  return ID;
-}
-function get_artifactSet_name(artifactSet){
-  const name = artifactSet.map(([set, number]) => `${set.name}${number}件套`).join("+");
-  return name;
-}
-function get_artifactSet_desc_array(artifactSet){
-  const allEffects = [];
-  for(let set of artifactSet){
-    if(set[1] >= 4){allEffects.push(...set[0].setEffects[2], ...set[0].setEffects[4])}
-    else if(set[1] >= 2){allEffects.push(...set[0].setEffects[2])};
-  };
-  const decs_array = allEffects.map(item => item.desc+";");
-  return decs_array;
-}
-function get_constellation_desc_array(charID, constellation){
+function get_constellation_desc_array(charID, constellation){// 给定角色和命座值，返回对应效果描述构成的列表
   const char = characters[charID];
   const allEffects = [];
   for(let i=0; i<=constellation; i++){
     allEffects.push(...char.constellationEffects[i]);
   }
   return allEffects.map(item => item.desc+";");
-}
-function get_weapon_desc_array(weapon){
-  const allEffects = [];
-  allEffects.push(...weapon.effects);
-  const valueText = get_stat_value_string(weapon.stat, weapon.statValue);
-  const decs_array = [`提供${weapon.batk}白值、${valueText}${weapon.statLabel}; `];
-  decs_array.push(...allEffects.map(item => item.desc+";"))
-  return decs_array;
 }
 function get_effective_substat_count_desc(charID){
   const char = characters[charID];
@@ -245,12 +250,12 @@ function get_effective_substat_count_desc(charID){
 };
 
 
-function update_character_effects(){ 
-  
+function update_character_effects(){ // 更新所有角色的角色效果
+  // 角色效果，包括技能效果、固有天赋、武器效果、圣遗物效果
   for(let [key, char] of Object.entries(characters)){
     if(characterEffects[key].toUpdate){
       let dynamic = [], net = [], permanent = [];
-      
+      // 先凑齐所有效果
       let allEffects = [...char.effects];
       if(char.weapon !== null){allEffects.push(...char.weapon.effects)};
       for(let set of char.artifactSet){
@@ -258,7 +263,7 @@ function update_character_effects(){
         else if(set[1] >= 2){allEffects.push(...set[0].setEffects[2])};
       };
       for(let j = 0; j <= char.constellation; j++){allEffects.push(...char.constellationEffects[j])};
-      
+      // 分类
       for (let effect of allEffects){
         if(effect.isPermanent){permanent.push(effect)}
         else{
@@ -266,7 +271,7 @@ function update_character_effects(){
           if(effect.isNet){net.push(effect)};
         };
       };
-      
+      // 赋值
       characterEffects[key].dynamic = dynamic;
       characterEffects[key].net = net;
       characterEffects[key].permanent = permanent;
@@ -275,12 +280,12 @@ function update_character_effects(){
   }
 }
 function update_team_effects(){
-  
+  // 用户修改的配置将作用在 characters 的元素上，此函数根据 characters 更新所有的效果列表
   if(toUpdateTeamEffects){
     teamEffects.length = 0;
     teamNetEffects.length = 0;
     teamPermanentEffects.length = 0;
-    
+    // 先获得共鸣效果
     let resonance_effects = get_elemental_resonance_effects(characters);
     for (let effect of resonance_effects){
       if(effect.isPermanent){teamPermanentEffects.push(effect)}
@@ -289,40 +294,41 @@ function update_team_effects(){
         if(effect.isNet){teamNetEffects.push(effect)};
       };
     };
-    
+    // 更新角色效果，并将角色效果添加到队伍效果中
     update_character_effects();
     for(let [ID, details] of Object.entries(characterEffects)){
       teamPermanentEffects.push(...details.permanent);
       teamEffects.push(...details.dynamic);
       teamNetEffects.push(...details.net);
     }
-    
+    // 修改指示器
     toUpdateTeamEffects = false;
   }
 }
 function combine_buffs(buffs){
+  // 将所有增益字典合成一个字典
   return buffs.reduce((result, obj) => {
       for (let [key, value] of Object.entries(obj)) {
         if(typeof value === "number" && (result[key] === undefined || typeof result[key] === "number")){
           result[key] = (result[key] || 0) + value;
         }
-        else{result[key] = value;}
+        else{result[key] = value;}  // 布尔开关等直接覆盖
       }
       return result;
   }, {});
 }
-function get_stat_buff_detail_value_string(stat, value){ 
+function get_stat_buff_detail_value_string(stat, value){ // 增益详情中词条值的字符串形式：固定值词条保留两位小数，百分比词条按百分比保留一位小数
   return FLAT_STAT_SET.has(stat) ? value.toFixed(2)+"" : (value*100).toFixed(1)+"%";
 }
 function merge_stat_buff_details(statBuffDetails, desc, effectBuff){
-  
-  
+  // 将单个效果给予的词条增益记录到 statBuffDetails 中，用对象记录，包含{name(效果名称), stat, value, 其他需要的参数}
+  // 效果名称为效果描述 desc 按照字符"：" split 之后的第一个元素
   let effectName = (desc || "").split("：")[0];
   for(let [k, v] of Object.entries(effectBuff)){
-    if(STAT_KEY_SET.has(k)){ 
+    if(STAT_KEY_SET.has(k)){ // 只记录词条增益，技能等级、其他参数等不记录
       if(statBuffDetails[k] === undefined){statBuffDetails[k] = []};
       let item = {name:effectName, stat:k, value:v, };
-      if(k === "flatDMG"){ 
+      if(k === "flatDMG"){ // 对于羽毛增益，需要记录其他参数
         item.singleFlatDMG = effectBuff.singleFlatDMG || v;
         item.hitnum = effectBuff.hitnum || 1;
         item.repetitionCount = effectBuff.repetitionCount || 1;
@@ -334,22 +340,22 @@ function merge_stat_buff_details(statBuffDetails, desc, effectBuff){
   }
 }
 
-function derive_effect_origID(IDText){
-  
-  
+function derive_effect_origID(IDText){// 获得武器或圣遗物套装效果的原本ID
+  // 武器和圣遗物可能存在多个同类实例，它们的ID命名规则为 名称+可能的数字，将数字去除后就是武器或圣遗物的原始ID；
+  // 将它们效果ID中的"_"分割的第一个元素的数字去掉，就是效果的原始ID
   const list = IDText.split("_");
-  const index = list[0].search(/\d/); 
-  list[0] = list[0].slice(0, index);
+  const index = list[0].search(/\d/); // 查找第一个数字 0-9
+  if(index >= 0){list[0] = list[0].slice(0, index);}
   const origID = list.join("_");
   return origID;
 };
 
 function derive_total_buff_from_effects(characterID, effects, teamInitialAttributes, teamNetAttributes, action, 
                                         isOnfield = characterID === onfieldCharacterID){
-  
-  
-  
-  
+  // 获得 characterID 对应角色当前 effects 扣除 ineffectiveEffectIDSet 之后对应的增益
+  // 其中角色净面板为 teamNetAttributes(字典)，行为为 action(字典)
+  // 返回值为列表，第一个元素为合并的buff，第二个元素为buff描述组成的列表，第三个元素为词条增益详情 statBuffDetails
+  // 效果需要考虑 isOnly 参数，如果有，那么只生效一个 
   let temp_buffs = [], buffDescs = [], statBuffDetails = {};
   let ineffectiveEffectIDSet = action.ineffectiveEffectIDSet || new Set([]);
   let ineffectiveEffectOwnerIDSet = action.ineffectiveEffectOwnerIDSet || new Set([]);
@@ -376,15 +382,15 @@ function derive_total_buff_from_effects(characterID, effects, teamInitialAttribu
         else if(key === "talentMetaIDs"){mark = mark && (value.includes(action.talentMeta.ID))}
         else if(key === "check"){mark = mark && value(teamInitialAttributes, characterID, action)}
         else{
-          let attr = teamNetAttributes[characterID];
+          let attr = teamInitialAttributes[characterID];
           if(attr == undefined){mark = false}
           else{mark = mark && (attr[key] === value)};
-        }; 
+        }; // 此时必须字段匹配
         if(mark === false){break;};
       }
       if(mark){
         let toWork = true;
-        if(effect.isOnly){
+        if(effect.isOnly){// 检测唯一性
           let origID = derive_effect_origID(effect.ID);
           if(onlyEffectIDSet.has(origID)){toWork = false;}
           else{onlyEffectIDSet.add(origID);}
@@ -402,34 +408,34 @@ function derive_total_buff_from_effects(characterID, effects, teamInitialAttribu
   return [buff, buffDescs, statBuffDetails];
 };
 function calculate_bonus_stats(stats){
-  
+  // 计算受到百分比增益和固定值增益后的攻击、防御、生命数值
   stats.atk = stats.batk * (1 + stats.atkp) + stats.atkf;
   stats.def = stats.bdef * (1 + stats.defp) + stats.deff;
   stats.hp = stats.bhp * (1 + stats.hpp) + stats.hpf;
 }
 function derive_buffed_character_attributes(initialAttributes, buff, buffDescs, statBuffDetails = {}, inplace = false){
-  
-  
+  // initialAttributes 为角色的初始面板，buff为总增益字典，得到增益后的面板，inplace表示要不要在初始面板上修改
+  // statBuffDetails 为词条增益详情，会被合并进生成面板的 statBuffDetails 中
   let attributes;
   if(inplace){attributes = initialAttributes}
   else{attributes = structuredClone(initialAttributes)};
   for(let [k, v] of Object.entries(buff)){
-    if(STAT_KEY_SET.has(k)){attributes.stats[k] += v} 
-    else if(TALENT_KEY_SET.has(k)){attributes.talentLevels[k] += v} 
-    else{ 
+    if(STAT_KEY_SET.has(k)){attributes.stats[k] += v} // 当前增益是词条增益
+    else if(TALENT_KEY_SET.has(k)){attributes.talentLevels[k] += v} // 当前是技能等级提升
+    else{ // 此时是效果需要的其他参数，直接覆盖原来的值
       if(attributes[k] !== undefined){attributes[k] = v};
     };
   };
   calculate_bonus_stats(attributes.stats);
   attributes.buffDescs.push(...buffDescs);
-  for(let [k, detailList] of Object.entries(statBuffDetails)){ 
+  for(let [k, detailList] of Object.entries(statBuffDetails)){ // 合并词条增益详情
     if(attributes.statBuffDetails[k] === undefined){attributes.statBuffDetails[k] = []};
     attributes.statBuffDetails[k].push(...detailList);
   }
   return attributes;
 };
 function convert_buff_from_artifacts(artifacts){
-  
+  // 将圣遗物词条给的增益转化为buff形式处理
   let buff = {};
   for(let [key, meta] of Object.entries(artifacts)){
     buff[meta.mainStat] = (buff[meta.mainStat] || 0) + ARTIFACT_MAIN_STATS[key][meta.mainStat].value;
@@ -440,18 +446,18 @@ function convert_buff_from_artifacts(artifacts){
   return buff;
 };
 function convert_buff_from_weapon(weapon){
-  
+  // 将武器的白值和主词条转化为buff形式处理
   let buff = {batk : weapon.batk};
   buff[weapon.stat] = weapon.statValue;
   return buff;
 };
 
 
-function initialize_all_attributes(){ 
+function initialize_all_attributes(){ // 初始化 toUpdateAttributes 中为true的角色的所有面板
   update_team_effects();
   let characterIDs = Object.keys(toUpdateAttributes).filter(key => toUpdateAttributes[key]);
   for(let key of characterIDs){
-    
+    /* 初始面板，角色基础值 + 圣遗物词条收益 + 武器收益 + 永久效果收益 */
     let char = characters[key];
     teamInitialAttributes[char.ID] = {
       ID: char.ID,
@@ -459,25 +465,25 @@ function initialize_all_attributes(){
       level : char.level,
       constellation: char.constellation,
       talentLevels: {...char.talentLevels},
-      buffDescs : [], 
-      statBuffDetails : {}, 
-      statBaseDetails : {}, 
+      buffDescs : [], // 受到增益buff的描述列表
+      statBuffDetails : {}, // 各词条受到的增益效果详情，key为词条ID，value为显示增益详情的列表
+      statBaseDetails : {}, // 各词条的基础数值详情(角色基础数值、武器、突破属性、圣遗物词条)，key为词条ID，value为{name, value, cls}组成的列表
     };
-    
+    // 构建面板基础数值详情，用于词条详情弹窗展示
     let statBaseDetails = {};
     const addBaseDetail = (k, name, value, cls) => {
       if(statBaseDetails[k] === undefined){statBaseDetails[k] = []};
       statBaseDetails[k].push({name, value, cls});
     };
-    addBaseDetail("batk", "角色基础攻击", char.base[char.level].atk, "v-red"); 
+    addBaseDetail("batk", "角色基础攻击", char.base[char.level].atk, "v-red"); // 角色基础数值，红色
     addBaseDetail("bdef", "角色基础防御", char.base[char.level].def, "v-red");
     addBaseDetail("bhp", "角色基础生命", char.base[char.level].hp, "v-red");
-    addBaseDetail("batk", char.weapon.name, char.weapon.batk, "v-red"); 
-    addBaseDetail("cr", "角色初始暴击率", 0.05, "v-red"); 
-    addBaseDetail("cd", "角色初始暴击伤害", 0.5, "v-red"); 
-    addBaseDetail(char.stat, "突破属性", char.statValue, "v-blue"); 
-    addBaseDetail(char.weapon.stat, char.weapon.name, char.weapon.statValue, "v-blue"); 
-    
+    addBaseDetail("batk", char.weapon.name, char.weapon.batk, "v-red"); // 武器基础攻击力，红色
+    addBaseDetail("cr", "角色初始暴击率", 0.05, "v-red"); // 角色初始暴击率，红色
+    addBaseDetail("cd", "角色初始暴击伤害", 0.5, "v-red"); // 角色初始暴击伤害，红色
+    addBaseDetail(char.stat, "突破属性", char.statValue, "v-blue"); // 角色突破属性，蓝色
+    addBaseDetail(char.weapon.stat, char.weapon.name, char.weapon.statValue, "v-blue"); // 武器主词条，蓝色
+    // 圣遗物主词条、副词条分别按词条求和，金色
     let artifactMainSum = {}, artifactSubSum = {};
     for(let [slot, meta] of Object.entries(char.artifacts)){
       artifactMainSum[meta.mainStat] = (artifactMainSum[meta.mainStat] || 0) + ARTIFACT_MAIN_STATS[slot][meta.mainStat].value;
@@ -505,18 +511,18 @@ function initialize_all_attributes(){
     Object.assign(teamInitialAttributes[char.ID], char.parameters);
     Object.assign(teamInitialAttributes[char.ID], char.variables);
     Object.assign(teamInitialAttributes[char.ID], teamTotalParameters);
-    Object.assign(teamInitialAttributes[char.ID], additionalAttributeParams[char.ID]); 
-    
+    Object.assign(teamInitialAttributes[char.ID], additionalAttributeParams[char.ID]); // 附加额外参数, 优先级最高
+    // 圣遗物词条收益
     let artifact_buff = convert_buff_from_artifacts(char.artifacts);
-    
+    // 武器收益
     let weapon_buff = convert_buff_from_weapon(char.weapon);
-    
+    // 永久效果收益
     let [permanent_buff, buffDescs, statBuffDetails] = derive_total_buff_from_effects(char.ID, teamPermanentEffects, {}, {}, {});
-    
+    // 叠加buff，并作用在基础值上
     let buff = combine_buffs([artifact_buff, weapon_buff, permanent_buff]);
     derive_buffed_character_attributes(teamInitialAttributes[char.ID], buff, buffDescs, statBuffDetails, true);
 
-    
+    // 其他面板，初始化都是 undefined
     teamNetAttributes[char.ID] = undefined;
     teamSnapshotAttributes[char.ID] = undefined;
     teamCurrentAttributes[char.ID] = undefined;
@@ -530,8 +536,8 @@ function initialize_all_attributes(){
 
 
 function derive_max_total_buff_from_effects(characterID, effects, teamInitialAttributes, teamMaxNetAttributes, isOnfield){
-  
-  
+  // 获得给定角色的最大可能buff，即考虑 获益角色ID、排除角色ID、是否前台、角色属性、其他字段、check。
+  // 返回值为列表，第一个元素为合并的buff，第二个元素为buff描述组成的列表，第三个元素为词条增益详情 statBuffDetails
   let temp_buffs = [], buffDescs = [], statBuffDetails = {};
   const onlyEffectIDSet = new Set([]);
   for(let effect of effects){
@@ -540,21 +546,21 @@ function derive_max_total_buff_from_effects(characterID, effects, teamInitialAtt
       if(key === "characterIDs"){mark = mark && (value.includes(characterID))}
       else if(key === "excludedCharacterIDs"){mark = mark && (!value.includes(characterID))}
       else if(key === "isOnfield"){mark = mark && (value === isOnfield)}
-      else if(key === "elements"){mark = mark && value.includes(teamInitialAttributes[characterID].element)}
+      else if(key === "elements"){mark = mark && value.includes(teamInitialAttributes[characterID].element)}// 对比角色属性代替伤害的属性
       else if(key === "excludedElements"){mark = mark && !value.includes(teamInitialAttributes[characterID].element)}
       else if(key === "rxndmgs" || key === "excludedRxndmgs" || key === "attackTypes" || key === "excludedAttackTypes" 
-              || key === "talentMetaIDs"){}
+              || key === "talentMetaIDs"){}//什么都不做，静默处理
       else if(key === "check"){mark = mark && value(teamInitialAttributes, characterID, {talentMeta:{}})}
       else{
-        let attr = teamMaxNetAttributes[characterID];
+        let attr = teamInitialAttributes[characterID];
         if(attr == undefined){mark = false}
         else{mark = mark && (attr[key] === value)};
-      }; 
+      }; // 此时必须字段匹配
       if(mark === false){break;};
     }
     if(mark){
       let toWork = true;
-      if(effect.isOnly){
+      if(effect.isOnly){// 检测唯一性
         let origID = derive_effect_origID(effect.ID);
         if(onlyEffectIDSet.has(origID)){toWork = false;}
         else{onlyEffectIDSet.add(origID);}
@@ -570,10 +576,10 @@ function derive_max_total_buff_from_effects(characterID, effects, teamInitialAtt
   let buff = combine_buffs(temp_buffs);
   return [buff, buffDescs, statBuffDetails];
 }
-function get_displayed_character_attributes(characterID, isOnfield){ 
-  initialize_all_attributes(); 
+function get_displayed_character_attributes(characterID, isOnfield){ // 得到被展示角色的面板，区分前后台
+  initialize_all_attributes(); // 初始化
   let mark = false;
-  for(let charID of Object.keys(characters)){ 
+  for(let charID of Object.keys(characters)){ // 净面板更新
     let checkValue = null;
     switch(characterDisplayAttributeType[onDisplayCharacterID]){
       case "initial":
@@ -593,175 +599,171 @@ function get_displayed_character_attributes(characterID, isOnfield){
       mark = true;
     }
   }
-  if(mark || teamMaxCurrentAttributes[characterID] == undefined){
+  if(mark || teamMaxCurrentAttributes[characterID] == undefined){// 需要更新当前角色最大可能面板
     let [buff, buffDescs, statBuffDetails] = derive_max_total_buff_from_effects(characterID, teamEffects, teamInitialAttributes, teamMaxNetAttributes, isOnfield);
     teamMaxCurrentAttributes[characterID] = derive_buffed_character_attributes(teamInitialAttributes[characterID], buff, buffDescs, statBuffDetails);
   }
   return teamMaxCurrentAttributes[characterID];
 }
 
+// #endregion
 
 
+/*伤害计算函数部分*/
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function get_action_array(characters){
-  
-  
-  
-  
-  const baseIneffective = new Set(["NoblesseOblige_Piece_4", "ThrillingTalesofDragonSlayers_Effect"]);
-  const baseIneffective2 = new Set(["NoblesseOblige_Piece_4", "ThrillingTalesofDragonSlayers_Effect", 
-                                    "Vodyanitsa_Passive2_1",
-                                   ]);
-  const reactionStellarSwirlAnemoOnfieldTalentMeta = {characterID: "Vesna", element:"anemo", rxndmg:"reactionStellarSwirl", 
-                                                ID:"reactionStellarSwirlAnemo", name:"反应星扩散:风", isOnfield:true};
-  const reactionStellarSwirlAnemoOfffieldTalentMeta = {characterID: "Faruzan", element:"anemo", rxndmg:"reactionStellarSwirl", 
-                                                       ID:"reactionStellarSwirlAnemo", name:"反应星扩散:风", isOnfield:false};
-  const reactionStellarSwirlCryoTalentMeta = {characterID: null, element:"cryo", rxndmg:"reactionStellarSwirl",
-                                              ID:"reactionStellarSwirlCryo", name:"反应星扩散:冰"};
-  const beginingActions = [
-    {talentMeta:Odette.talentMetas.e0, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e1_cryo, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e2_swirl, ineffectiveEffectIDSet:baseIneffective2,},
-    {talentMeta:Faruzan.talentMetas.e0, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Faruzan.talentMetas.q0, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vodyanitsa.talentMetas.e0, ineffectiveEffectIDSet:new Set(["ThrillingTalesofDragonSlayers_Effect"])},
-    {talentMeta:Faruzan.talentMetas.q_c6_vortex, repetitionCount:6, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e_off1_swirl, repetitionCount:5,  ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e_off1_cryo, repetitionCount:5,  ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e_off2_swirl, repetitionCount:4,  ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Odette.talentMetas.e_off2_cryo, repetitionCount:4,  ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.swap, },
-    {talentMeta:Vodyanitsa.talentMetas.e_off, repetitionCount:6, ineffectiveEffectIDSet:baseIneffective},
-  ];
-  if(Odette.constellation >= 1){beginingActions.push(
-    {talentMeta:Odette.talentMetas.e2_special_swirl, ineffectiveEffectIDSet:baseIneffective},
-  )}
-  if(Odette.constellation >= 4){beginingActions.push(
-    {talentMeta:Odette.talentMetas.e_off_special_swirl, repetitionCount:5,  ineffectiveEffectIDSet:baseIneffective},
-  )}
-  const VesnaActionsC0 = [
-    {talentMeta:Vesna.talentMetas.e0},
-    {talentMeta:Vesna.talentMetas.a1},
-    {talentMeta:Vesna.talentMetas.a2},
-    {talentMeta:Vesna.talentMetas.e1},
-    {talentMeta:Vesna.talentMetas.e2_anemo},
-    {talentMeta:Vesna.talentMetas.e2_stellar},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.q},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.a1},
-    {talentMeta:Vesna.talentMetas.a2},
-    {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:4},
-    {talentMeta:reactionStellarSwirlAnemoOnfieldTalentMeta, repetitionCount:15,},
-    {talentMeta:reactionStellarSwirlAnemoOfffieldTalentMeta, repetitionCount:6,},
-    {talentMeta:reactionStellarSwirlCryoTalentMeta, repetitionCount:5, parameters:{stacks:3}},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e_windPinion, ineffectiveEffectIDSet:baseIneffective},
-  ];
-  const VesnaActionsC1 = [
-    {talentMeta:Vesna.talentMetas.e0},
-    {talentMeta:Vesna.talentMetas.e1},
-    {talentMeta:Vesna.talentMetas.e2_anemo},
-    {talentMeta:Vesna.talentMetas.e2_stellar},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.q},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.a1},
-    {talentMeta:Vesna.talentMetas.a2},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:5},
-    {talentMeta:reactionStellarSwirlAnemoOnfieldTalentMeta, repetitionCount:15,},
-    {talentMeta:reactionStellarSwirlAnemoOfffieldTalentMeta, repetitionCount:6,},
-    {talentMeta:reactionStellarSwirlCryoTalentMeta, repetitionCount:5, parameters:{stacks:3}},
-    {talentMeta:Vesna.talentMetas.a1, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.a2, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e_windPinion, ineffectiveEffectIDSet:baseIneffective},
-  ]
-  const VesnaActionsC6 = [
-    {talentMeta:Vesna.talentMetas.e0},
-    {talentMeta:Vesna.talentMetas.e1},
-    {talentMeta:Vesna.talentMetas.e2_anemo},
-    {talentMeta:Vesna.talentMetas.e2_stellar},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.step_anemo},
-    {talentMeta:Vesna.talentMetas.step_stellar},
-    {talentMeta:Vesna.talentMetas.q},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.step_anemo},
-    {talentMeta:Vesna.talentMetas.step_stellar},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2},
-    {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:7},
-    {talentMeta:reactionStellarSwirlAnemoOnfieldTalentMeta, repetitionCount:15,},
-    {talentMeta:reactionStellarSwirlAnemoOfffieldTalentMeta, repetitionCount:6,},
-    {talentMeta:reactionStellarSwirlCryoTalentMeta, repetitionCount:5, parameters:{stacks:3}},
-    {talentMeta:Vesna.talentMetas.step_anemo, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.step_stellar, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e3_stellar_1, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e3_stellar_2, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.step_anemo, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.step_stellar, ineffectiveEffectIDSet:baseIneffective},
-    {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:3, ineffectiveEffectIDSet:baseIneffective},
-  ];
-  switch(Number(characters.Vesna.constellation)){
-    case 0:
-      return [[...beginingActions, ...VesnaActionsC0], 19];
-    case 6:
-      return [[...beginingActions, ...VesnaActionsC6], 19.5];
-    default:
-      return [[...beginingActions, ...VesnaActionsC1], 19];
-  };
+function get_action_array(teamInitialAttributes, characters){// 给定参与角色及其配置，返回对应的手法列表和总耗时
+  // 先按照 order 排序
+  let orderTocharID = Object.fromEntries(Object.keys(characters).map(charID => [teamInitialAttributes[charID].order, charID]));
+  let orders = Object.keys(characters).map(charID => teamInitialAttributes[charID].order).sort((a,b)=>a-b);
+  const sortedCharIDs = orders.map(o => orderTocharID[o]);
+  const n_chars = sortedCharIDs.length;
+  const onfieldActionsList = [];
+  const swapTimeStamps = [0];
+  const onfieldDurations = [];
+  const maxCDs = [];
+  for(let charID of sortedCharIDs){// 前台
+    const actionsObject = characters[charID].get_onfield_actionsObject(teamInitialAttributes[charID]);
+    onfieldActionsList.push(actionsObject.actions);
+    swapTimeStamps.push(swapTimeStamps.at(-1) + actionsObject.duration);
+    onfieldDurations.push(actionsObject.duration);
+    maxCDs.push(characters[charID].get_max_CD(teamInitialAttributes[charID]));
+  }
+  const origOnfieldDurations = [...onfieldDurations];
+  const totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1));
+  onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1);
+  swapTimeStamps[n_chars] = totalTime; // 如果冷却时间长，就把多出来的站场时间给最后一个人（大C）
+  // 更新 onfieldActionsList 中的 timestamp
+  for(let i=0; i<n_chars; i++){
+    let actions = onfieldActionsList[i], startTS = swapTimeStamps[i];
+    for(let action of actions){
+      if(typeof action.timestamp === "number"){action.timestamp += startTS;}
+    }
+  }
+  /* 获得需要的效果持续对象： {效果ID: [起始时间戳，终止时间戳]} {效果ID：[[第一个角色登场时失效范围], ...]},
+     {效果ID：[效果生效的角色ID]}
+  */
+  const effectSchedules = {}, effectIneffectiveRanges = {}, effectTargets = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(characters[charID].weapon.name === "讨龙英杰谭"){// 讨龙
+      for(let effect of characters[charID].weapon.effects){
+        effectSchedules[effect.ID] = [swapTimeStamps[i+1], swapTimeStamps[i+1]+10];
+        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1], 10, onfieldDurations);
+        effectTargets[effect.ID] = [sortedCharIDs[(i+1)%n_chars]];
+      }
+    };
+    if(get_artifactSet_ID(characters[charID].artifactSet) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
+      // 宗室
+      let index = onfieldActionsList[i].findIndex(action => (action.talentMeta.attackType === "burst" && action.timestamp != undefined));
+      let delta = (index >= 0 && typeof onfieldActionsList[i][index].timestamp === "number")? 
+                          (onfieldDurations[i] - onfieldActionsList[i][index].timestamp + swapTimeStamps[i]) : 0;
+      for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
+        effectSchedules[effect.ID] = [swapTimeStamps[i+1]+2*EPSILON-delta, swapTimeStamps[i+1]+2*EPSILON+12-delta]; // EPSILON保证珐露珊自己大招吃不到宗室
+        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1]+2*EPSILON-delta, 12, onfieldDurations);
+        effectTargets[effect.ID] = sortedCharIDs;
+      }
+    };
+  }
+  /* 给 actions 附加细节 */
+  for(let idx in sortedCharIDs){
+    let i = Number(idx);
+    for(let effectID of Object.keys(effectIneffectiveRanges)){
+      if(effectTargets[effectID].includes(sortedCharIDs[i])){
+        const set = new Set([effectID]);
+        for(let [leftTS, rightTS] of effectIneffectiveRanges[effectID][i]){
+          assign_details_to_actions_between_timestamps(onfieldActionsList[i], {ineffectiveEffectIDSet:set}, leftTS, rightTS);
+        }
+      }
+    }
+  }
+  /* 获得后台行为和反应 */
+  const offfieldActionsList = sortedCharIDs.map(k=>[]);
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i], char = characters[charID];
+    const tempEffectSchedules = {};
+    for(let effectID of Object.keys(effectTargets)){ // 角色只处理受影响的效果
+      if(effectTargets[effectID].includes(charID)){
+        tempEffectSchedules[effectID] = effectSchedules[effectID];
+      }
+    }
+    const charOfffieldObject = char.get_offfield_actionsObject(teamInitialAttributes[charID], i, onfieldDurations, 
+                                                               tempEffectSchedules, false);
+    const actionsList = charOfffieldObject.actionsList || sortedCharIDs.map(k=>[]);
+    for(let j =0; j<n_chars; j++){
+      offfieldActionsList[j].push(...actionsList[j]);
+    }
+  }
+  // 排序
+  for(let j =0; j<n_chars; j++){
+    sort_actions_by_timestamps(offfieldActionsList[j]);
+  }
+  /* 单独处理沃雅妮莎的领唱和重唱效果 */
+  // 沃雅妮莎的领唱效果
+  let effectDetails = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
+      let effects = [Vodyanitsa.effects[1]];
+      for(let j=0; j<effects.length; j++){
+        let effect = effects[j], effectID = effect.ID;
+        effectDetails[effectID] = {};
+        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 25];
+        effectDetails[effectID].effect = effect;
+      }
+    }
+  }
+  assign_detials_to_segment_actions(onfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, false);
+  // 沃雅妮莎的重唱效果
+  effectDetails = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
+      let effects = [Vodyanitsa.effects[3]];
+      for(let j=0; j<effects.length; j++){
+        let effect = effects[j], effectID = effect.ID;
+        effectDetails[effectID] = {};
+        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 10];
+        effectDetails[effectID].effect = effect;
+      }
+    }
+  }
+  assign_detials_to_segment_actions(offfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, true);
+  // 拼接
+  const actions = [];
+  for(let idx in sortedCharIDs){
+    let i = Number(idx);
+    actions.push({talentMeta:characters[sortedCharIDs[i]].talentMetas.swap});
+    actions.push(...onfieldActionsList[i], ...offfieldActionsList[i]);
+  }
+  return [actions, totalTime];
 };
+
+
+
+
 
 
 
 
 const enemyLevel = 110, enemyRes = {pyro:0.10, hydro:0.10, electro:0.10, cryo:0.10, dendro:0.10, geo:0.10, anemo:0.10};
 function get_resistance_multiplier(stats, element){
-  
+  // 计算抗性系数
   let resistance = (enemyRes[element] - stats[element + "DeRes"]);
   if(resistance < 0){return 1-0.5*resistance}
   else if(resistance < 0.75){return 1 - resistance}
   else{return 1/(4*resistance+1)}
 };
 function get_defence_multiplier(stats, level){
-  
+  // 计算防御系数
   return (level + 100) / (level+100 + (enemyLevel+100)*(Math.max(1-stats.defReduction, 0.1)*(Math.max(1-stats.defIgnore, 0))));
 };
 function get_crit_multiplier(stats){
-  
+  // 计算暴击乘区（期望）
   let cr = Math.max(0, Math.min(stats.cr, 1)), cd = stats.cd;
   return 1 + cr * cd;
 };
 function get_elemental_mastery_factor(stats, rxndmg){
-  
+  // 获得当前反应伤害类型的精通因子
   if(CATALYZE_SET.has(rxndmg)){return 5*stats.em/(stats.em+1200)}
   else if(TRANSFORMATIVE_SET.has(rxndmg)){return 16*stats.em/(stats.em + 2000)}
   else if(AMPLIFYING_SET.has(rxndmg)){return 2.78*stats.em/(stats.em+1400)}
@@ -769,7 +771,7 @@ function get_elemental_mastery_factor(stats, rxndmg){
   else {return 0};
 };
 function get_reaction_multiplier(element, rxndmg, parameters = {}){
-  
+  // 给定伤害的元素和反应伤害类型，返回反应乘区
   switch(rxndmg){
     case "none":
       return 1.0;
@@ -832,7 +834,7 @@ function get_reaction_multiplier(element, rxndmg, parameters = {}){
     case "reactionLunarCrystallize":
       return 0.96;
       break;
-    case "directStellarConduct": 
+    case "directStellarConduct": // 星超导的反应乘区值看层数确定
       let stacks = (parameters.stacks || 0);
       let dict = {0:1, 1:1.45, 2:1.5, 3:1.54, 4:1.6, 5:1.64, 6:1.7, 7:1.75, 8:1.79, 9:1.85, 10:1.89, 11:1.95, 12:2};
       return dict[stacks];
@@ -878,7 +880,7 @@ function dot(array1, array2){
   return sum;
 }
 
-const MULTIPLIERS = {
+const MULTIPLIERS = {// 乘区名
   levelMult : "等级乘区",  critMult : "暴击乘区",  rxnMult : "反应系数",  rxnBonusMult : "反应系数提升乘区",
   rxnBaseDMGMult : "反应基础提升乘区",  dmgBonusMult : "增伤乘区",  resMult : "抗性乘区",  elevationMult : "擢升乘区",
   defMult : "防御乘区",  baseMult : "基础乘区", flatDMG : "额外伤害", catalyzeMult : "额外激化伤害",
@@ -886,16 +888,17 @@ const MULTIPLIERS = {
   totalDMG: "总伤害", 
 };
 const INT_TERM_SET = new Set(["baseMult", "flatDMG", "catalyzeMult", "repetitionCount", "flatMult", 
-  "DMG", "totalDMG", "atk", "hp", "def", "hitnum", "stacks", "consumption", "remaining", "singleFlatDMG" 
+  "DMG", "totalDMG", "atk", "hp", "def", "hitnum", "stacks", "consumption", "remaining", "singleFlatDMG" // 数字为整数的乘区或词条ID集合
 ]); 
 
 function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = undefined){
-  
-  
-  
-  
-  
-  if(action.talentMeta.ID === "swap"){return {dmg:0, rxndmg:null, dmgType:null, details:{}, repetitionCount:0}}; 
+  /* 给定所有角色的当前面板和当前的行为（技能），计算对应的伤害值，返回伤害值和乘区信息
+   返回一个字典，包含{伤害结果，元素，技能名称, 反应伤害类型，伤害类型(不同伤害类型的乘区不一样)，伤害细节(记录乘区结果), 重数, 元素附着次数}
+   {dmg, element, talentMetaName, rxndmg, dmgType, details, repetitionCount, EACount}
+   伤害细节 = {角色ID : {具体的各个乘区, buff描述(buffDescs)，角色词条面板(stats, 吃快照的取快照，吃当前的取当前)}};
+   伤害需要考虑重数 repetitionCount
+  */
+  if(action.talentMeta.ID === "swap"){return {dmg:0, rxndmg:null, dmgType:null, details:{}, repetitionCount:0}}; // 切换角色不用处理
   let details = {};
   let ID = action.talentMeta.characterID, element = action.talentMeta.element;
   let rxndmg = (action.rxndmg || action.talentMeta.rxndmg);
@@ -907,9 +910,9 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
   const EACount = (action.talentMeta != undefined) ? action.talentMeta.EACount||0 : 0;
 
   let resMult = get_resistance_multiplier(stats, element);
-  if(action.talentMeta.scaling == undefined ){
-    if(LUNAR_SET.has(rxndmg)){ 
-      
+  if(action.talentMeta.scaling == undefined ){// 此时为剧变反应伤害
+    if(LUNAR_SET.has(rxndmg)){ // 月曜反应伤害，全队参与
+      // 先确定哪些人参加了反应（考虑所有参与反应的元素）
       let tempKey = rxndmg.replace(/^(direct|reaction)/, "");
       tempKey = tempKey.charAt(0).toLowerCase() + tempKey.slice(1);
       let contributors = [], participation = new Set(["hydro"]);
@@ -936,20 +939,20 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
                             dmg, buffDescs:tempAttr.buffDescs, stats:tempStats, statBuffDetails:tempAttr.statBuffDetails, 
                             statBaseDetails:tempAttr.statBaseDetails, repetitionCount};
       }
-      
+      // 加权和，并考虑羽毛的影响
       let sortedDMGs = Object.values(team_damages).sort((a,b) => b-a);
       let weightedDMG = dot(sortedDMGs, weights);
       let finalDMG = weightedDMG * repetitionCount;
       let flatMult = 0;
-      if(ID !== null && ID !== undefined){  
+      if(ID !== null && ID !== undefined){  // 计算羽毛
         flatMult = stats.flatDMG * details[ID].resMult * details[ID].critMult * details[ID].elevationMult;
         finalDMG += flatMult;
         details[ID].flatDMG = stats.flatDMG;
       }
       return {dmg:finalDMG, element, talentMetaName, rxndmg, dmgType:"reactionLunar", details, repetitionCount, EACount, weightedDMG, flatMult};
     }
-    else if(STELLAR_SET.has(rxndmg)){ 
-      
+    else if(STELLAR_SET.has(rxndmg)){ // 星烁反应伤害，全队参与
+      // 先确定哪些人参加了反应（考虑所有参与反应的元素）
       let tempKey = rxndmg.replace(/^(direct|reaction)/, "");
       tempKey = tempKey.charAt(0).toLowerCase() + tempKey.slice(1);
       let contributors = [], participation = new Set(["cryo"]);
@@ -975,19 +978,19 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
                             buffDescs:tempAttr.buffDescs, stats:tempStats, statBuffDetails:tempAttr.statBuffDetails, 
                             statBaseDetails:tempAttr.statBaseDetails, repetitionCount};
       }
-      
+      // 加权和
       let sortedDMGs = Object.values(team_damages).sort((a,b) => b-a);
       let weightedDMG = dot(sortedDMGs, weights);
       let finalDMG = weightedDMG * repetitionCount;
       let flatMult = 0;
-      if(ID != undefined){  
+      if(ID != undefined){  // 计算羽毛
         flatMult = stats.flatDMG * details[ID].resMult * details[ID].critMult * details[ID].elevationMult;
         finalDMG += flatMult;
         details[ID].flatDMG = stats.flatDMG;
       }
       return {dmg:finalDMG, element, talentMetaName, rxndmg, dmgType:"reactionStellar", details, repetitionCount, EACount, weightedDMG, flatMult};
     }
-    else{ 
+    else{ // 普通的剧变反应伤害
       let rxnMult = get_reaction_multiplier(element, rxndmg);
       let levelMult = stats.levelMult;
       let emFactor = get_elemental_mastery_factor(stats, rxndmg);
@@ -1000,17 +1003,18 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
     }
   }
   else{ 
-      
-      
+    // 此时为直伤、增幅反应、异化剧变反应直伤、激化反应
+    // 这部分需要处理快照面板，快照机制按如下处理：攻击、防御、最大生命、暴击、暴伤、各类元素伤害加成是锁的，在增幅反应中精通是锁的，其他按照当前面板数据计算；
+    // 默认伤害都是快照的，当 snapshotAttributes = undefined 时，则令 snapshotAttributes = teamCurrentAttributes[当前角色ID]，同样逻辑处理
     const snapshot_attributes = snapshotAttributes || attributes;
     const snapshotStats = snapshot_attributes.stats;
-    let outputStats = structuredClone(stats); 
+    let outputStats = structuredClone(stats); // 最后输出的角色面板，将其中需要快照的部分替换成 snapshotStats 对应的值
     const snapshotKeys = ["atk", "def", "hp", "cr", "cd", "batk", "bdef", "bhp", "atkp", "defp", "hpp", "atkf", 
                           "deff", "hpf", "pyroDMG", "hydroDMG", "electroDMG", "cryoDMG", "dendroDMG", "geoDMG",
                           "anemoDMG", "physicalDMG"];
-    if(AMPLIFYING_SET.has(rxndmg)){snapshotKeys.push("em")}; 
+    if(AMPLIFYING_SET.has(rxndmg)){snapshotKeys.push("em")}; // 增幅反应锁精通
     snapshotKeys.forEach(key => {outputStats[key] = snapshotStats[key]});
-    
+    // 输出的词条增益详情：快照词条继承快照面板的 statBuffDetails，非快照词条继承当前面板的 statBuffDetails
     const outputStatBuffDetails = {};
     const currStatBuffDetails = attributes.statBuffDetails || {};
     const snapshotStatBuffDetails = snapshot_attributes.statBuffDetails || {};
@@ -1022,7 +1026,7 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
     let base = Object.fromEntries(Object.keys(scaling).map(key => [key, snapshotStats[key]||0]));
     let baseMult = dot(Object.values(base), Object.values(scaling));
     let critMult = get_crit_multiplier(snapshotStats);
-    if(rxndmg === "none"){
+    if(rxndmg === "none"){// 直伤
       let defMult = get_defence_multiplier(stats, attributes.level);
       let dmgBonusMult = 1 + snapshotStats[element + "DMG"] + stats[attackType + "DMG"], flatDMG = stats.flatDMG;
       let baseDMGMult = stats.baseDMGMult;
@@ -1032,7 +1036,7 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
                       statBaseDetails:attributes.statBaseDetails, repetitionCount};
       return {dmg, element, talentMetaName, rxndmg, dmgType:"direct", details, repetitionCount, EACount};
     }
-    else if(AMPLIFYING_SET.has(rxndmg)){
+    else if(AMPLIFYING_SET.has(rxndmg)){// 增幅反应
       let defMult = get_defence_multiplier(stats, attributes.level);
       let dmgBonusMult = 1 + snapshotStats[element + "DMG"] + stats[attackType + "DMG"], flatDMG = stats.flatDMG;
       let rxnMult = get_reaction_multiplier(element, rxndmg);
@@ -1045,7 +1049,7 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
                       statBaseDetails:attributes.statBaseDetails, repetitionCount};
       return {dmg, element, talentMetaName, rxndmg, dmgType:"amplifying", details, repetitionCount, EACount};
     }
-    else if(LUNAR_SET.has(rxndmg) || STELLAR_SET.has(rxndmg)){
+    else if(LUNAR_SET.has(rxndmg) || STELLAR_SET.has(rxndmg)){// 月曜或者星烁直伤
       let tempKey = rxndmg.charAt(6).toLowerCase() + rxndmg.slice(7);
       let dmgType = LUNAR_SET.has(rxndmg) ? "lunar" : "stellar";
       let rxnMult = get_reaction_multiplier(element, rxndmg);
@@ -1060,7 +1064,7 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
                       statBaseDetails:attributes.statBaseDetails, repetitionCount};
       return {dmg, element, talentMetaName, rxndmg, dmgType, details, repetitionCount, EACount};
     }
-    else if(CATALYZE_SET.has(rxndmg)){
+    else if(CATALYZE_SET.has(rxndmg)){// 激化反应
       let defMult = get_defence_multiplier(stats, attributes.level);
       let dmgBonusMult = 1 + snapshotStats[element + "DMG"] + stats[attackType + "DMG"], flatDMG = stats.flatDMG, levelMult = stats.levelMult;
       let rxnMult = get_reaction_multiplier(element, rxndmg);
@@ -1080,85 +1084,100 @@ function calculate_damage(teamCurrentAttributes, action, snapshotAttributes = un
   }
 };
 
-function update_net_attributes(action, characterIDs = Object.keys(characters)){ 
+function update_net_attributes(action, characterIDs = Object.keys(characters)){ // 用净效果列表获得增益，计算净面板
   for(let charID of characterIDs){
     let [netBuff, buffDescs, netStatBuffDetails] = derive_total_buff_from_effects(charID, teamNetEffects, teamInitialAttributes, teamInitialAttributes, action);
     teamNetAttributes[charID] = derive_buffed_character_attributes(teamInitialAttributes[charID], netBuff, buffDescs, netStatBuffDetails);
   }
 }
-function update_dynamic_attributes(action, characterIDs = Object.keys(characters)){
+function update_dynamic_attributes(action, characterIDs = Object.keys(characters)){// 基于净效果计算全效果增益，计算全面板
   for(let charID of characterIDs){
     let [buff, buffDescs, statBuffDetails] = derive_total_buff_from_effects(charID, teamEffects, teamInitialAttributes, teamNetAttributes, action);
     teamCurrentAttributes[charID] = derive_buffed_character_attributes(teamInitialAttributes[charID], buff, buffDescs, statBuffDetails);
   }
 }
-function get_character_snapshot_attributes(characterID, action){
+function get_character_snapshot_attributes(characterID, action){// 获得指定角色的快照面板（就是当前的全面板）
   let [buff, buffDescs, statBuffDetails] = derive_total_buff_from_effects(characterID, teamEffects, teamInitialAttributes, teamNetAttributes, action);
   return derive_buffed_character_attributes(teamInitialAttributes[characterID], buff, buffDescs, statBuffDetails);
 }
-function simulate(actionArray, totalTime){
+function simulate(actionArray, totalTime){// 序贯处理 actionArray
+  // 初始化
   update_team_cost();
   update_team_effects();
-  initialize_toUpdateAttributes();
   onfieldCharacterID = null;
+  initialize_toUpdateAttributes();
   initialize_all_attributes();
-  let n_action = actionArray.length;
-  const results = []; 
+  const tempActionArray = [...actionArray]; // 不要修改原来的数组
+  let n_actions = tempActionArray.length;
+  const results = []; // 包含{calculate_damage的输出, characterID, onfieldCharacterID}
   const damages = [];
-  
-  for(let i = 0; i<n_action; i++){
-    let action = {...actionArray[i]};
+  // 开始
+  let i = 0;
+  while(i < n_actions){
+    let action = {...tempActionArray[i]};
     let characterID = action.talentMeta.characterID;
     let hitnum = action.talentMeta.hitnum || 1;
     let char = characterID ? characters[characterID] : {constellation:-1};
+    let initAttr = characterID? teamInitialAttributes[characterID] : undefined;
     let condition = action.condition || {};
     let toPass = true;
-    
+    // 反应判定：若 rxndmg 存在，则将 talentMeta 中的反应换成这个
     if(action.rxndmg){
-      action.talentMeta = structuredClone(actionArray[i].talentMeta);
+      action.talentMeta = structuredClone(tempActionArray[i].talentMeta);
       action.talentMeta.rxndmg = action.rxndmg;
     }
-    
-    if(action.talentMeta.constellation && action.talentMeta.constellation > char.constellation){toPass = false;} 
-      
+    // 元素判定：若 element 存在，则将 talentMeta 中的元素换成这个
+    if(action.element){
+      action.talentMeta = structuredClone(tempActionArray[i].talentMeta);
+      action.talentMeta.element = action.element;
+    }
+    // 可行性判定：看看有没有命座需求，还有condition的条件(主要是字段判定)
+    toPass = toPass && check_action_condition(initAttr, action);
     if(!toPass){
-      if(action.replacement){action.talentMeta = action.replacement}
-      else{continue;}
+      if(action.replacements){
+        let n_replacements = action.replacements.length;
+        n_actions += n_replacements - 1;
+        tempActionArray.splice(i, 1, ...action.replacements);
+        continue;
+      }
+      else{i++; continue;}
     }
     if(action.talentMeta.ID === "swap"){
       onfieldCharacterID = characterID;
-      continue; 
+      i++;
+      continue; // 跳过切换角色
     }
     else{
-      
+      //先判断场上角色
       if(action.talentMeta.isOnfield && action.talentMeta.characterID != null ){
         onfieldCharacterID = action.talentMeta.characterID;
       }
-      const curr_result = {hitnum, characterID, onfieldCharacterID};
+      const curr_result = {hitnum, characterID, onfieldCharacterID, timestamp:action.timestamp};
       update_net_attributes(action);
       update_dynamic_attributes(action);
-      
+      // 判断当前伤害是不是快照
       if(action.talentMeta.isSnapshot === true){
-        
-        if(teamSnapshotAttributes[characterID] == null){
+        // 判断要不要更新快照面板
+        if(teamSnapshotAttributes[characterID] == null){// 更新快照面板
           teamSnapshotAttributes[characterID] = get_character_snapshot_attributes(characterID, action);
         }
-        
+        // 计算伤害
         Object.assign(curr_result, calculate_damage(teamCurrentAttributes, action, teamSnapshotAttributes[characterID]));
         results.push(curr_result);
         damages.push(curr_result.dmg);
-        
+        // 判断快照是否结束
         if(action.isSnapshotEnd){teamSnapshotAttributes[characterID] = null};
       }
       else{
-        
+        // 计算伤害
         Object.assign(curr_result, calculate_damage(teamCurrentAttributes, action));
         results.push(curr_result);
         damages.push(curr_result.dmg);
       }
     }
+    i++;
   }
-  const totalDMG = damages.reduce((acc, cur) => acc+cur, 0); 
+  const totalDMG = damages.reduce((acc, cur) => acc+cur, 0); // 求数组的和
   const dps = totalDMG / totalTime;
   return {results, damages, totalDMG, totalTime, dps};
 }
@@ -1172,49 +1191,48 @@ function simulate(actionArray, totalTime){
 
 
 
+/* 用户交互部分的函数 */
 
-const FLAT_STAT_SET = new Set(["em", "atkf", "deff", "hpf", "atk", "def", "hp", "batk", "bdef", "bhp",
-                                "levelMult", "flatDMG"]);
-function get_stat_value_string(stat, value){ 
+function get_stat_value_string(stat, value){ // 获得词条值的字符串形式
   return FLAT_STAT_SET.has(stat) ?  value.toFixed(0)+"": (value*100).toFixed(1)+"%";
 }
 
-const COMPOSITE_STAT_MAP = { 
+const COMPOSITE_STAT_MAP = { // 复合展示词条与其组成词条的对应关系，展示详情时把组成词条的增益一并列出
   atk: ["batk", "atkp", "atkf"],
   def: ["bdef", "defp", "deff"],
   hp:  ["bhp", "hpp", "hpf"],
 }; 
-function convert_numberText_to_number(valueText){
+function convert_numberText_to_number(valueText){// 将之前的"数值=>字符串"的过程逆回来
   if(valueText.at(-1) === "%"){return Number(valueText.slice(0, -1)) / 100}
   else{return Number(valueText)}
 }
-
+// 角色选择相关
 function create_character_selection_part(characterSelectionDivId){
   const maindiv = document.getElementById(characterSelectionDivId); maindiv.replaceChildren();
   maindiv.classList.remove("hidden");
   const subtitle = document.createElement("span"); subtitle.className = "subtitle"; subtitle.style["margin-bottom"] = "20px";
   subtitle.textContent = "角色选择";
   maindiv.append(subtitle);
-  
+  // 主要部分
   const submainDiv = document.createElement("div"); submainDiv.className = "char-select-part";
   const candidateDiv = document.createElement("div"); candidateDiv.className = "card";
   const selectedDiv = document.createElement("div"); selectedDiv.className = "card";
   const selectedDiv1 = document.createElement("div"); selectedDiv1.className = "char-select-result"; 
   submainDiv.append(candidateDiv, selectedDiv);
   maindiv.append(submainDiv);
-  
+  // 左侧：候选角色
   const candidateDiv_h1 = document.createElement("h1"); candidateDiv_h1.textContent = "候选角色";
   const candidateDiv_container = document.createElement("div"); candidateDiv_container.className = "char-select-candidate";
   for(let charID of Object.keys(candidateCharacters)){
     const box = document.createElement('div'); box.className = "charbox"; box.textContent = candidateCharacters[charID].name;
     box.dataset.charID = charID; box.dataset.isSelected = false;
     candidateDiv_container.append(box);
-    if(Object.keys(selectedCharacters).includes(charID)){box.classList.add("selected"); box.dataset.isSelected = true;} 
+    if(Object.keys(selectedCharacters).includes(charID)){box.classList.add("selected"); box.dataset.isSelected = true;} // 当角色被选中时，需要切换box的类
   }
-  candidateDiv.append(candidateDiv_h1, candidateDiv_container); 
-  
-  const selectedDiv_item1 = document.createElement("div"); selectedDiv_item1.className = "char-select-h1-row"; 
-  const selectedDiv_item2 = document.createElement("div"); selectedDiv_item2.className = "char-select-h1-row"; 
+  candidateDiv.append(candidateDiv_h1, candidateDiv_container); // 监听事件放在后面定义
+  // 右侧：选择结果
+  const selectedDiv_item1 = document.createElement("div"); selectedDiv_item1.className = "char-select-h1-row"; // 必须角色
+  const selectedDiv_item2 = document.createElement("div"); selectedDiv_item2.className = "char-select-h1-row"; // 选择角色
   const selectedDiv_item1_h1 = document.createElement("h1"); selectedDiv_item1_h1.textContent = "必需角色";
   const selectedDiv_item2_h1 = document.createElement("h1"); selectedDiv_item2_h1.textContent = "已选择角色";
   selectedDiv_item1.append(selectedDiv_item1_h1); selectedDiv_item2.append(selectedDiv_item2_h1);
@@ -1235,7 +1253,7 @@ function create_character_selection_part(characterSelectionDivId){
   selectedDiv_item3_1.style["align-items"] = "center";
   const selectedDiv_item3_1_span = document.createElement("span"); selectedDiv_item3_1_span.className = "error-text";
   selectedDiv_item3_1.append(selectedDiv_item3_1_span);
-  const selectedDiv_item3_2 = document.createElement("div"); selectedDiv_item3.style["text-align"] = "right"; 
+  const selectedDiv_item3_2 = document.createElement("div"); selectedDiv_item3.style["text-align"] = "right"; // 用来装载一个按钮
   const selectedDiv_btn = document.createElement("button"); selectedDiv_btn.className = "btn"; selectedDiv_btn.style["width"] = "150pt";
   selectedDiv_btn.textContent = "确认角色选择";
   selectedDiv_btn.onclick = function(){
@@ -1255,22 +1273,22 @@ function create_character_selection_part(characterSelectionDivId){
   selectedDiv_item3.append(selectedDiv_item3_1, selectedDiv_item3_2);
   selectedDiv1.append(selectedDiv_item1, selectedDiv_item2);
   selectedDiv.append(selectedDiv1, selectedDiv_item3)
-  
+  // 定义之前没定义的监听事件
   candidateDiv_container.addEventListener('click', (e) => {
     const box = e.target.closest('.charbox');
     if (!box) return;
     selectedDiv.style["border"] = "";
     selectedDiv_item3_1_span.textContent = "";
-    if(box.dataset.isSelected === "true"){ 
+    if(box.dataset.isSelected === "true"){ // 角色之前被选中，现在要从 selectedCharacters 中删去
       delete selectedCharacters[box.dataset.charID];
-      box.classList.toggle('selected');
+      box.classList.toggle('selected');// 切换选中状态
       box.dataset.isSelected = false;
       update_character_row(selectedDiv_item2_row, selectedCharacters);
     }
     else{
-      if(Object.keys(selectedCharacters).length + Object.keys(requiredCharacters).length == 4){return;}
+      if(Object.keys(selectedCharacters).length + Object.keys(requiredCharacters).length == 4){return;}// 角色选满了
       selectedCharacters[box.dataset.charID] = candidateCharacters[box.dataset.charID];
-      box.classList.toggle('selected');
+      box.classList.toggle('selected');// 切换选中状态
       box.dataset.isSelected = true;
       update_character_row(selectedDiv_item2_row, selectedCharacters);
     }
@@ -1281,8 +1299,11 @@ function create_character_selection_part(characterSelectionDivId){
 
 
 
-
+// 角色配置和展示
 function build_stat_detail_lines(statBaseDetails, statBuffDetails, statID){
+  // 生成详情弹窗的行列表：先列基础数值(角色基础、武器、突破属性、圣遗物词条)，再列效果增益
+  // 复合词条(攻击力、防御力、最大生命值)会聚合其组成词条的详情
+  // 每行形式为 {name: 名称, valueText: 数值文本, cls: 数值颜色类, stat:词条名, value:具体值}
   let keys = [statID, ...(COMPOSITE_STAT_MAP[statID] || [])];
   let lines = [];
   for(let k of keys){
@@ -1292,7 +1313,7 @@ function build_stat_detail_lines(statBaseDetails, statBuffDetails, statID){
     }
   }
   for(let k of keys){
-    for(let detail of ((statBuffDetails || {})[k] || [])){ 
+    for(let detail of ((statBuffDetails || {})[k] || [])){ // detail 为对象{stat, value, name, 其他参数}
       lines.push({name: detail.name, valueText: get_stat_buff_detail_value_string(k, detail.value), cls: "buff-value", 
                   stat:k, value:detail.value});
     }
@@ -1300,9 +1321,9 @@ function build_stat_detail_lines(statBaseDetails, statBuffDetails, statID){
   return lines;
 }
 
-function show_stat_buff_detail_popup(statName, lines){ 
+function show_stat_buff_detail_popup(statName, lines){ // 弹出词条详情弹窗，每条占一行，名称为白色，数值颜色由行的 cls 决定
   const old = document.querySelector(".stat-detail-modal-overlay");
-  if(old){old.remove()}; 
+  if(old){old.remove()}; // 保证同时只有一个弹窗
   const overlay = document.createElement("div");
   overlay.className = "stat-detail-modal-overlay";
   const modal = document.createElement("div");
@@ -1321,8 +1342,8 @@ function show_stat_buff_detail_popup(statName, lines){
     empty.textContent = "当前没有与该词条相关的增益效果。";
     modal.appendChild(empty);
   }
-  else{ 
-    const summary = {}; 
+  else{ // 每个贡献占一行，最后一行进行汇总
+    const summary = {}; // stat : value的和
     for(let line of lines){
       const p = document.createElement("p");
       const nameSpan = document.createElement("span");
@@ -1344,12 +1365,12 @@ function show_stat_buff_detail_popup(statName, lines){
     modal.appendChild(p);
   }
   overlay.appendChild(modal);
-  overlay.onclick = function(){overlay.remove()}; 
+  overlay.onclick = function(){overlay.remove()}; // 点击弹窗外部关闭
   modal.onclick = function(e){e.stopPropagation()};
   document.body.appendChild(overlay);
 }
 
-function create_paragraphs_from_strings(wrap, strings){
+function create_paragraphs_from_strings(wrap, strings){// 在wrap(不是id，是实体)下建立多个<p>，每个对应 strings (列表)的一个元素
   for(let desc of strings){
     const p = document.createElement("p");
     p.textContent = desc;
@@ -1357,18 +1378,18 @@ function create_paragraphs_from_strings(wrap, strings){
   }
 };
 
-function create_buttons_for_displaying_build(id){
+function create_buttons_for_displaying_build(id){// 建立多个按钮，用来控制哪些角色的配置需要设置和展示
   const wrap = document.getElementById(id);
   const div = document.createElement("div");
   div.style.marginBottom = "8px";
-  
+  // 定义具体的按钮对象
   for(let charID of Object.keys(characters)){
     const button = document.createElement("button");
     button.className = "btn";
     button.textContent = characters[charID].name;
     button.onclick = function(){
       const displayDivId = characterBuildDivIds[charID];
-      if(displayDivId === onDisplayCharacterBuildDivId) return; 
+      if(displayDivId === onDisplayCharacterBuildDivId) return; // 点击当前角色，直接返回
       const displayDiv = document.getElementById(displayDivId);
       displayDiv.classList.remove("hidden");
       const currDisplayDiv = document.getElementById(onDisplayCharacterBuildDivId);
@@ -1382,12 +1403,12 @@ function create_buttons_for_displaying_build(id){
 }
 
 
-const characterBuildDivIds = Object.fromEntries(Object.keys(characters).map(ID => [ID, ID + "_characterBuildDiv"]));
-let onDisplayCharacterBuildDivId = Object.keys(characters)[0] + "_characterBuildDiv"; 
-let onDisplayCharacterID = Object.keys(characters)[0]; 
-function create_character_build_part(buildId){
-  const maindiv = document.getElementById(buildId); 
-  maindiv.replaceChildren(); 
+const characterBuildDivIds = Object.fromEntries(Object.keys(characters).map(ID => [ID, ID + "_characterBuildDiv"]));// 用来记录每个角色的角色配置Div块的id，控制显示
+let onDisplayCharacterBuildDivId = Object.keys(characters)[0] + "_characterBuildDiv"; // 正在展示的div的id
+let onDisplayCharacterID = Object.keys(characters)[0]; // 应当展示的角色的ID（面板调整的角色的ID）
+function create_character_build_part(buildId){// 建立若干个div区域用来填写角色配置，每个区域对应一个角色，这些区域挂靠在一个id div区域下
+  const maindiv = document.getElementById(buildId); // 父div的id
+  maindiv.replaceChildren(); // 删除原有残留
   const maindiv_subtitleBtn = document.createElement("div");
   maindiv_subtitleBtn.className = "subtitle_btn";
   const maindiv_subtitleBtn_span = document.createElement("span");
@@ -1405,31 +1426,31 @@ function create_character_build_part(buildId){
   maindiv.appendChild(maindiv_subtitleBtn);
   create_buttons_for_displaying_build(buildId);
   for(let [charID, char] of Object.entries(characters)){
-    const div = document.createElement("div"); 
+    const div = document.createElement("div"); // 每个角色所属的块
     div.className = "card";
     div.id = characterBuildDivIds[charID];
-    if(div.id !== onDisplayCharacterBuildDivId){
+    if(div.id !== onDisplayCharacterBuildDivId){// 不是展示的div块时，附加 hidden 类
       div.classList.add("hidden");
     }
-    const title = document.createElement("h1"); 
+    const title = document.createElement("h1"); // 写标题，包括角色名和角色属性
     title.textContent = `${char.name}(${ELEMENTS[char.element].charAt(0)})`;
     div.appendChild(title);
-    
+    // #region 角色等级选择
     const levelDiv = document.createElement("div");
     levelDiv.className = "name_input_desc";
-    
+    // 子标题
     const levelSubDiv1 = document.createElement("div");
     const levelSubDiv1_h2 = document.createElement("h2");
     levelSubDiv1_h2.textContent = "等级选择";
     levelSubDiv1.appendChild(levelSubDiv1_h2);
-    
+    // 描述(因为描述内容跟着选择内容改变，因此放前面定义)
     const levelSubDiv3 = document.createElement("div");
     const levelSubDiv3_span = document.createElement("span");
     levelSubDiv3_span.className = "desc";
     levelSubDiv3_span.textContent = "基础值:" + Object.entries(char.base[char.level]).map(([statID, value]) =>`
                                       ${STATS[statID]} ${value}`).join(", ");
     levelSubDiv3.appendChild(levelSubDiv3_span);
-    
+    // 选择界面
     const levelSubDiv2 = document.createElement("div");
     const levelSubDiv2_select = document.createElement("select");
     levelSubDiv2_select.id = charID + "_levelSelection";
@@ -1440,7 +1461,7 @@ function create_character_build_part(buildId){
       levelSubDiv3_span.textContent = desc;
     }
     levelSubDiv2_select.onchange = function(){char.level = Number(this.value); toUpdateAttributes[charID] = true; update_level_desc();};
-    for(let level of Object.keys(char.base)){ 
+    for(let level of Object.keys(char.base)){ // 从角色基础数值对象中获得候选等级
       let levelSubDiv2_select_option = document.createElement("option");
       levelSubDiv2_select_option.value = Number(level);
       levelSubDiv2_select_option.textContent = level;
@@ -1452,33 +1473,33 @@ function create_character_build_part(buildId){
     levelSubDiv2.appendChild(levelSubDiv2_select);
     levelDiv.append(levelSubDiv1, levelSubDiv2, levelSubDiv3);
     div.appendChild(levelDiv);
-    
+    // #endregion
 
-    
+    // #region 角色命座选择
     const constellationDiv = document.createElement("div");
     constellationDiv.className = "name_input_desc";
-    
+    // 子标题
     const constellationSubDiv1 = document.createElement("div");
     const constellationSubDiv1_h2 = document.createElement("h2");
     constellationSubDiv1_h2.textContent = "命座选择";
     constellationSubDiv1.appendChild(constellationSubDiv1_h2);
-    
+    // 描述(因为描述内容跟着选择内容改变，因此放前面定义)
     const constellationSubDiv3 = document.createElement("div");
     constellationSubDiv3.className = "desc-box";
     create_paragraphs_from_strings(constellationSubDiv3, get_constellation_desc_array(charID, char.constellation));
-    
+    // 选择界面
     const constellationSubDiv2 = document.createElement("div");
     const constellationSubDiv2_select = document.createElement("select");
     constellationSubDiv2_select.id = charID + "_constellationSelection";
     const update_constellation_desc = function(){
       const constellation = char.constellation;
-      constellationSubDiv3.replaceChildren(); 
+      constellationSubDiv3.replaceChildren(); // 清空原有的子节点(<p>)
       create_paragraphs_from_strings(constellationSubDiv3, get_constellation_desc_array(charID, constellation));
     }
     constellationSubDiv2_select.onchange = function(){char.constellation = Number(this.value); initialize_toUpdateAttributes(); 
                                                       toUpdateTeamEffects = true; characterEffects[charID].toUpdate = true;
                                                       update_constellation_desc();};
-    for(let constellation of Object.keys(char.constellationEffects)){ 
+    for(let constellation of Object.keys(char.constellationEffects)){ // 从角色基础数值对象中获得候选命座
       let constellationSubDiv2_select_option = document.createElement("option");
       constellationSubDiv2_select_option.value = Number(constellation);
       constellationSubDiv2_select_option.textContent = constellation;
@@ -1490,23 +1511,23 @@ function create_character_build_part(buildId){
     constellationSubDiv2.appendChild(constellationSubDiv2_select);
     constellationDiv.append(constellationSubDiv1, constellationSubDiv2, constellationSubDiv3);
     div.appendChild(constellationDiv);
-    
+    // #endregion
 
-    
+    // #region 角色武器选择
     const weaponDiv = document.createElement("div");
     weaponDiv.className = "name_input2_desc";
-    
+    // 子标题
     const weaponSubDiv1 = document.createElement("div");
     const weaponSubDiv1_h2 = document.createElement("h2");
     weaponSubDiv1_h2.textContent = "武器选择";
     weaponSubDiv1.appendChild(weaponSubDiv1_h2);
-    
+    // 描述(因为描述内容跟着选择内容改变，因此放前面定义)
     const weaponSubDiv4 = document.createElement("div");
     weaponSubDiv4.className = "desc-box";
     create_paragraphs_from_strings(weaponSubDiv4, get_weapon_desc_array(char.weapon));
-    
-    const weaponSubDiv2 = document.createElement("div"); 
-    const weaponSubDiv3 = document.createElement("div"); 
+    // 武器选择界面
+    const weaponSubDiv2 = document.createElement("div"); // 武器选择
+    const weaponSubDiv3 = document.createElement("div"); // 精炼选择
     const weaponSubDiv2_select = document.createElement("select");
     const weaponSubDiv3_select = document.createElement("select");
     weaponSubDiv2_select.id = charID + "_weaponSelection";
@@ -1519,7 +1540,7 @@ function create_character_build_part(buildId){
     const candidateWeaponIDs = Object.keys(char.candidateWeapons);
     let defaultRank = char.weapon.rank || 1;
     const rankOptions = {};
-    for(let i=1; i<6; i++){ 
+    for(let i=1; i<6; i++){ // 获得精炼候选的option
       let weaponSubDiv3_select_option = document.createElement("option");
       weaponSubDiv3_select_option.value = i;
       weaponSubDiv3_select_option.textContent = `精炼${i}阶`;
@@ -1528,7 +1549,7 @@ function create_character_build_part(buildId){
       rankOptions[i] = weaponSubDiv3_select_option;
     }
     let defaultID = char.weapon.ID || candidateWeaponIDs[0];
-    for(let weaponID of candidateWeaponIDs){ 
+    for(let weaponID of candidateWeaponIDs){ // 从角色基础数值对象中获得候选武器
       let weaponSubDiv2_select_option = document.createElement("option");
       weaponSubDiv2_select_option.value = weaponID;
       weaponSubDiv2_select_option.textContent = char.candidateWeapons[weaponID].name;
@@ -1537,7 +1558,7 @@ function create_character_build_part(buildId){
       }
       weaponSubDiv2_select.appendChild(weaponSubDiv2_select_option);
     }
-    weaponSubDiv2_select.onchange = function(){
+    weaponSubDiv2_select.onchange = function(){// 武器选择
       char.weapon = char.candidateWeapons[this.value]; 
       char.weapon.be_equipped(charID, char.name);
       toUpdateAttributes[charID] = true; 
@@ -1549,7 +1570,7 @@ function create_character_build_part(buildId){
         else{rankOptions[rank].selected = false};
       })
     };
-    weaponSubDiv3_select.onchange = function(){
+    weaponSubDiv3_select.onchange = function(){// 精炼选择
       char.weapon.rank = Number(this.value);
       toUpdateAttributes[charID] = true; 
       toUpdateTeamEffects = true; 
@@ -1560,22 +1581,22 @@ function create_character_build_part(buildId){
     weaponSubDiv3.appendChild(weaponSubDiv3_select);
     weaponDiv.append(weaponSubDiv1, weaponSubDiv2, weaponSubDiv3, weaponSubDiv4);
     div.appendChild(weaponDiv);
-    
+    // #endregion
 
-    
+    // #region 角色圣遗物套装选择
     const artifactSetDiv = document.createElement("div");
     artifactSetDiv.className = "name_input_desc";
     artifactSetDiv.style["grid-template-columns"] = "110px 0.35fr 0.65fr";
-    
+    // 子标题
     const artifactSetSubDiv1 = document.createElement("div");
     const artifactSetSubDiv1_h2 = document.createElement("h2");
     artifactSetSubDiv1_h2.textContent = "圣遗物套装";
     artifactSetSubDiv1.appendChild(artifactSetSubDiv1_h2);
-    
+    // 描述(因为描述内容跟着选择内容改变，因此放前面定义)
     const artifactSetSubDiv3 = document.createElement("div");
     artifactSetSubDiv3.className = "desc-box";
     create_paragraphs_from_strings(artifactSetSubDiv3, get_artifactSet_desc_array(char.artifactSet));
-    
+    // 选择界面
     const artifactSetSubDiv2 = document.createElement("div");
     const artifactSetSubDiv2_select = document.createElement("select");
     artifactSetSubDiv2_select.id = charID + "_artifactSetSelection";
@@ -1585,7 +1606,7 @@ function create_character_build_part(buildId){
     }
     artifactSetSubDiv2_select.onchange = function(){
       char.artifactSet = char.candidateArtifactSets[this.value]; 
-      
+      // 需要对套装组合中的每一个套装设置装备角色
       for(let [set, number] of char.artifactSet){
         set.be_equipped(charID, char.name);
       }
@@ -1596,7 +1617,7 @@ function create_character_build_part(buildId){
     };
     const candidateArtifactSetIDs = Object.keys(char.candidateArtifactSets);
     defaultID = candidateArtifactSetIDs[0];
-    for(let artifactSetID of candidateArtifactSetIDs){ 
+    for(let artifactSetID of candidateArtifactSetIDs){ // 从角色基础数值对象中获得候选武器
       let artifactSetSubDiv2_select_option = document.createElement("option");
       artifactSetSubDiv2_select_option.value = artifactSetID;
       artifactSetSubDiv2_select_option.textContent = get_artifactSet_name(char.candidateArtifactSets[artifactSetID]);
@@ -1608,40 +1629,40 @@ function create_character_build_part(buildId){
     artifactSetSubDiv2.appendChild(artifactSetSubDiv2_select);
     artifactSetDiv.append(artifactSetSubDiv1, artifactSetSubDiv2, artifactSetSubDiv3);
     div.appendChild(artifactSetDiv);
-    
+    // #endregion
 
-    
+    // #region 圣遗物词条相关选择/输入
     const artifactMainStatDiv = document.createElement("div");
     const artifactSubStatDiv = document.createElement("div");
     div.appendChild(artifactMainStatDiv);
     div.appendChild(artifactSubStatDiv);
 
-      
-    const substatElemenets = Object.fromEntries(Object.keys(ARTIFACT_SLOTS).map(k=>[k, {}])); 
+      // #region 角色圣遗物副词条数输入
+    const substatElemenets = Object.fromEntries(Object.keys(ARTIFACT_SLOTS).map(k=>[k, {}])); // 构建圣遗物单件ID => 圣遗物副词条ID => HTML单元的映射
     artifactSubStatDiv.className = "ally";
-    
+    // 子标题
     const artifactSubStatDiv_h2 = document.createElement("h2");
     artifactSubStatDiv_h2.textContent = "圣遗物副词条条数（每部位 0–6 条，按均值计算）";
     artifactSubStatDiv.appendChild(artifactSubStatDiv_h2);
-    
+    // 添加一行小字，说明有效副词条数
     const effective_desc = document.createElement("p");
     effective_desc.style["margin-top"] = "10px";
     effective_desc.className = "desc";
     effective_desc.textContent = get_effective_substat_count_desc(charID);
-    
+    // 数值输入
     for(let [slot, cn] of Object.entries(ARTIFACT_SLOTS)){
       let substats = char.artifacts[slot].subStats;
       let substatKeys = Object.keys(substats);
-      let artifactSubStatSubDiv = document.createElement("div"); 
+      let artifactSubStatSubDiv = document.createElement("div"); // 每行一个<div class="slot">的块，slot为左右两部分，左边是标题，右边是若干个输入框
       artifactSubStatSubDiv.className = "slot";
-      let span = document.createElement("span"); 
+      let span = document.createElement("span"); // 标题
       span.className = "name";
       span.textContent = `${cn}`;
-      let subdiv = document.createElement("div"); 
+      let subdiv = document.createElement("div"); // 子div，用来承载输入
       subdiv.className = "substats";
       for(let statID of substatKeys){
         substatElemenets[slot][statID] = {};
-        let subspan = document.createElement("span"); 
+        let subspan = document.createElement("span"); // 副词条名称
         subspan.textContent = `${STATS[statID]}`;
         let input = document.createElement("input");
         input.type = "number";
@@ -1667,15 +1688,15 @@ function create_character_build_part(buildId){
     }
     artifactSubStatDiv.appendChild(effective_desc); 
     
-    
+    // #endregion
 
-      
+      // #region 角色圣遗物主词条选择
     artifactMainStatDiv.className = "ally";
-    
+    // 子标题
     const artifactMainStatDiv_h2 = document.createElement("h2");
     artifactMainStatDiv_h2.textContent = "圣遗物配置（5★ 20级）";
     artifactMainStatDiv.appendChild(artifactMainStatDiv_h2);
-    
+    // 选项
     for(let slotID of Object.keys(ARTIFACT_SLOTS)){
       let artifactMainStatSubDiv = document.createElement("div");
       artifactMainStatSubDiv.className = "slot";
@@ -1689,7 +1710,7 @@ function create_character_build_part(buildId){
         const prevstat = char.artifacts[slotID].mainStat;
         char.artifacts[slotID].mainStat = mainstat;
         toUpdateAttributes[charID] = true;
-        
+        // 对应副词条必须为0
         substatElemenets[slotID][prevstat].input.max = 6;
         substatElemenets[slotID][prevstat].span.style["color"] = "var(--dim)";
         substatElemenets[slotID][mainstat].input.value = 0;
@@ -1703,8 +1724,8 @@ function create_character_build_part(buildId){
         option.value = key;
         option.textContent = `${data.label} +${valueText}`;
         if (key === char.artifacts[slotID].mainStat) {
-          option.selected = true;  
-          
+          option.selected = true;  // 设置默认选中
+          // 设置对应副词条格式
           if(Object.keys(ARTIFACT_SUB_STATS).includes(key)){
             substatElemenets[slotID][key].input.value = 0;
             substatElemenets[slotID][key].input.max = 0;
@@ -1717,18 +1738,18 @@ function create_character_build_part(buildId){
       artifactMainStatSubDiv.append(artifactMainStatSubDiv_span, artifactMainStatSubDiv_select);
       artifactMainStatDiv.appendChild(artifactMainStatSubDiv);
     }
-    
+    // #endregion
 
     
-    
+    // #endregion
     maindiv.appendChild(div);
   }
 }
 
 const displayButtons = {initial:"初始面板", onField:"前台面板", offField:"后台面板"};
-const characterDisplayAttributeType = Object.fromEntries(Object.keys(characters).map(ID => [ID, "initial"])); 
-const displayRegionId = "displayRegion"; 
-function get_stat_note(attributes, statID){ 
+const characterDisplayAttributeType = Object.fromEntries(Object.keys(characters).map(ID => [ID, "initial"])); // 角色具体展示什么面板，有初始、前台、后台选项
+const displayRegionId = "displayRegion"; // 在这个id对应的区域内展示数据
+function get_stat_note(attributes, statID){ // 获得词条 statID 在展示时需要的额外说明
   const stats = attributes.stats;
   switch(statID){
     case "atk":
@@ -1742,16 +1763,16 @@ function get_stat_note(attributes, statID){
   }
 }
 
-function display_attributes(attributes){ 
+function display_attributes(attributes){ // 在给定区域内展示角色数据和效果
   const wrap = document.getElementById(displayRegionId);
-  wrap.replaceChildren(); 
+  wrap.replaceChildren(); // 清空
   const wrap_h1_1 = document.createElement("h1");
   wrap_h1_1.textContent = "角色数据";
   wrap.appendChild(wrap_h1_1);
   const statDiv = document.createElement("div");
   statDiv.className = "stat-grid";
 
-  
+  // 角色数据展示
   const displayStats = characters[attributes.ID].displayedStats;
   for(let statID of displayStats){
     const stats = attributes.stats;
@@ -1759,11 +1780,11 @@ function display_attributes(attributes){
     subdiv.className = "stat";
     const subdiv_statNameDiv = document.createElement("div");
     subdiv_statNameDiv.className = "statName";
-    subdiv_statNameDiv.append(`${STATS[statID]}`); 
-    const subdiv_statNameDiv_detailbtn = document.createElement("button"); 
+    subdiv_statNameDiv.append(`${STATS[statID]}`); // 先插入文字
+    const subdiv_statNameDiv_detailbtn = document.createElement("button"); // 详情显示
     subdiv_statNameDiv_detailbtn.className = "detailCell";
     subdiv_statNameDiv_detailbtn.textContent = "详情";
-    subdiv_statNameDiv_detailbtn.onclick = function(){ 
+    subdiv_statNameDiv_detailbtn.onclick = function(){ // 弹出该词条相关的增益效果详情
       show_stat_buff_detail_popup(STATS[statID], build_stat_detail_lines(attributes.statBaseDetails, attributes.statBuffDetails, statID));
     };
     subdiv_statNameDiv.append(subdiv_statNameDiv_detailbtn);
@@ -1780,7 +1801,7 @@ function display_attributes(attributes){
   }
   wrap.append(statDiv);
 
-  
+  // 角色吃到的效果展示
   const effectDiv = document.createElement("div");
   effectDiv.className = "ally";
   const effectDiv_h1 = document.createElement("h1");
@@ -1794,13 +1815,13 @@ function display_attributes(attributes){
   wrap.append(effectDiv);
 }
 
-function create_display_part(displayId){ 
+function create_display_part(displayId){ // 设置展示区
   const maindiv = document.getElementById(displayId);
   const maindiv_subtitle = document.createElement("span");
   maindiv_subtitle.className = "subtitle";
   maindiv_subtitle.textContent = `面板展示: ${displayButtons[characterDisplayAttributeType[onDisplayCharacterID]]}`;
   maindiv.appendChild(maindiv_subtitle);
-  
+  // 三个按钮，控制展示什么面板
   const btndiv = document.createElement("div");
   btndiv.style["margin-top"] = "10px";
   btndiv.style["margin-bottom"] = "10px";
@@ -1837,27 +1858,26 @@ function create_display_part(displayId){
     btndiv.appendChild(btn);
   }
   maindiv.appendChild(btndiv);
-  
+  // 角色面板展示区域
   const region = document.createElement("div");
   region.className = "card";
   region.id = displayRegionId;
   maindiv.appendChild(region);
 }
 
-
+// 展示伤害细节
 const damageComputationDivId = "damageComputationDiv", damageDetailDivId = "damageDetailDiv";
-function create_damage_table(wrapComputation, wrapDetail, solve){
-  
+function create_damage_table(wrapComputation, wrapDetail, solve, desc = "计算表格"){// 基于计算结果 solve 在 wrapComputation 中画表格，wrapDetail中展示细节
+  // 整理数据
   const results = solve.results;
   const dataNum = results.length;
-  
-  wrapComputation.replaceChildren();
+  // 画图
   const wrapComputation_h1 = document.createElement("h1");
-  wrapComputation_h1.textContent = `计算表格: 总耗时${solve.totalTime}秒`;
+  wrapComputation_h1.textContent = desc + `(总耗时${solve.totalTime.toFixed(2)}秒)`;
   wrapComputation.appendChild(wrapComputation_h1);
-  
+  // #region 画表格
   const table = document.createElement("table");
-    
+    // #region 表头部分
   const tableHead = document.createElement("thead"); 
   let tr = document.createElement("tr");
   let th = document.createElement("th");
@@ -1867,16 +1887,19 @@ function create_damage_table(wrapComputation, wrapDetail, solve){
     let th = document.createElement("th");
     th.textContent = i+1;
     th.classList.add("clickableth");
-    th.addEventListener("click", function() {
-      display_damage_details(wrapDetail, results[i]);
-    });
+    th.dataset.col = i;
     tr.appendChild(th);
   }
+  tr.addEventListener("click", function(e){
+    const th = e.target.closest("th");
+    if (!th || th.dataset.col == null) return;   // 序号列没有 data-col，忽略
+    display_damage_details(wrapDetail, results[Number(th.dataset.col)]);
+  });
   tableHead.append(tr);
-  
+  // #endregion
 
-    
-  const tableBody = document.createElement("tbody"); 
+    // #region 表体部分
+  const tableBody = document.createElement("tbody"); // result 包含{dmg, element, talentMetaName, rxndmg, dmgType, details, repetitionCount, EACount, characterID, onfieldCharacterID}
   const data = {"角色名称": results.map(item => (item.characterID != null) ? characters[item.characterID].name : "——"),
     "角色位置": results.map(item => (item.characterID == null) ? "——" : ((item.characterID === item.onfieldCharacterID)? "前台":"后台")),
     "技能名称": results.map(item => (item.talentMetaName != null) ? item.talentMetaName : "——"),
@@ -1893,6 +1916,7 @@ function create_damage_table(wrapComputation, wrapDetail, solve){
         }),
     "技能段数": results.map(item => item.hitnum||1),
     "重复次数": results.map(item => item.repetitionCount||1),
+    // "时间戳" : results.map(item => {if(typeof item.timestamp === "number"){return item.timestamp.toFixed(2)}else{return "——"}}),
     "伤害值": results.map(item => (item.dmg).toFixed(0)),
   }
   for(let [key, list] of Object.entries(data)){
@@ -1908,11 +1932,11 @@ function create_damage_table(wrapComputation, wrapDetail, solve){
     }
     tableBody.appendChild(tr);
   }
-  
+  // #endregion
   table.append(tableHead, tableBody);
   table.className = "dmg";
   const tableWrap = document.createElement("div");
-  tableWrap.className = "table-wrap";   
+  tableWrap.className = "table-wrap";   // 套用现成的外框样式
   tableWrap.appendChild(table);
   wrapComputation.appendChild(tableWrap);
   const displayWrap = document.createElement("div");
@@ -1926,11 +1950,13 @@ function create_damage_table(wrapComputation, wrapDetail, solve){
   
   displayWrap.append(text1, box1, text2, box2);
   wrapComputation.appendChild(displayWrap);
-  
-}
+  // #endregion
+} 
+
+
 
 const fmtExprValue = (k, v) => (v == undefined || isNaN(v)) ? "?" : (INT_TERM_SET.has(k) ? Number(v).toFixed(0) : Number(v).toFixed(3));
-
+// 各伤害类型的乘区顺序："m"=乘区框（值从 details[ID] 取，名称从 MULTIPLIERS 取），其余为运算符
 const EXPR_TERMS = {
   direct:        [["(", "txt"], ["baseMult","m"], ["×","op"], ["baseDMGMult","m"], ["×","op"], ["repetitionCount","m"], ["+","op"], ["flatDMG","m"], [")×","op"], ["dmgBonusMult","m"], ["×","op"], ["critMult","m"], ["×","op"], ["resMult","m"], ["×","op"], ["defMult","m"]],
   amplifying:    [["(", "txt"], ["baseMult","m"], ["×","op"], ["baseDMGMult","m"], ["×","op"], ["repetitionCount","m"], ["+","op"], ["flatDMG","m"], [")×","op"], ["rxnMult","m"], ["×","op"], ["rxnBonusMult","m"], ["×","op"], ["dmgBonusMult","m"], ["×","op"], ["critMult","m"], ["×","op"], ["resMult","m"], ["×","op"], ["defMult","m"]],
@@ -1942,7 +1968,7 @@ const EXPR_TERMS = {
   reactionStellar:[["levelMult","m"], ["×","op"], ["rxnMult","m"], ["×","op"], ["rxnBaseDMGMult","m"], ["×","op"], ["rxnBonusMult","m"], ["×","op"], ["resMult","m"], ["×","op"], ["critMult","m"], ["×","op"], ["elevationMult","m"]],
 };
 
-function makeExprRow(terms, values, totalDMG){ 
+function makeExprRow(terms, values, totalDMG){ // 生成一行表达式：terms 为 token 列表，values 为乘区值字典，totalDMG 为等号右侧总伤害
   const row = document.createElement("div");
   row.className = "expr-row";
   for(let [tok, type] of terms){
@@ -1985,12 +2011,12 @@ function display_damage_details(wrapDetail, result){
                                 ${result.characterID? result.characterID === result.onfieldCharacterID?"前台":"后台" : ""}
                                 ${result.talentMetaName || ""}`;
   wrapDetail.appendChild(wrapDetail_h1);
-  
+  // #region 开始填写细节
   const maindiv = document.createElement("div");
   maindiv.className = "detail-grid";
-  const expressionDiv = document.createElement("div"); 
-  const detailDiv = document.createElement("div"); 
-    
+  const expressionDiv = document.createElement("div"); // 用来写伤害计算表达式的区域
+  const detailDiv = document.createElement("div"); // 用来写角色部分面板详情和吃到的效果（可以参考“展示区”的写法）
+    // #region ---------- 1. expressionDiv：伤害表达式 ----------
   const exprTitle = document.createElement("h2");
   exprTitle.textContent = "伤害表达式";
   expressionDiv.appendChild(exprTitle);
@@ -1998,7 +2024,7 @@ function display_damage_details(wrapDetail, result){
   exprScroll.className = "expr-scroll";
   const dmgType = result.dmgType;
   if(dmgType === "reactionLunar" || dmgType === "reactionStellar"){
-    
+    // 全队参与的反应伤害：每个贡献者一行表达式，最后一行加权汇总
     const totalWeights = (dmgType === "reactionLunar") ? [1, 1/2, 1/12, 1/12] : [3/5, 3/10, 1/20, 1/20];
     const get_contribDmg = (cid) => { const d = result.details[cid];
         return d.dmg || d.levelMult * d.rxnMult * d.rxnBaseDMGMult * d.rxnBonusMult * d.resMult * d.critMult * d.elevationMult; };
@@ -2026,24 +2052,25 @@ function display_damage_details(wrapDetail, result){
     sumRow.append(mkExprOp(")"), mkExprOp("×"), mkExprBox(result.repetitionCount, MULTIPLIERS["repetitionCount"], "repetitionCount"), 
                   mkExprOp("+"));
     const tid = result.characterID;
-    let flatDMGRow = null; 
-    let flatDMGRemainingRow = null; 
-    if(tid != null && result.details[tid] && result.details[tid].flatDMG != undefined){
+    let flatDMGRow = null; // 如果羽毛增益存在，额外添加一行展示羽毛
+    let flatDMGRemainingRow = null; // 羽毛的剩余次数展示
+    if(tid != null && result.details[tid] && result.details[tid].flatDMG > 0){
       const d = result.details[tid];
       sumRow.append(mkExprBox(d.flatDMG, MULTIPLIERS["flatDMG"], "flatDMG"), mkExprOp("×"),
                     mkExprBox(d.resMult, MULTIPLIERS["resMult"], "resMult"), mkExprOp("×"),
                     mkExprBox(d.critMult, MULTIPLIERS["critMult"], "critMult"), mkExprOp("×"),
                     mkExprBox(d.elevationMult, MULTIPLIERS["elevationMult"], "elevationMult"),
                     );
-      
+      // 羽毛部分
       flatDMGRow = document.createElement("div"); flatDMGRow.className = "expr-row";
       let flatDMGBuffdetails = d.statBuffDetails["flatDMG"];
       flatDMGRow.append(mkExprBox(d.flatDMG, MULTIPLIERS["flatDMG"], "flatDMG"), mkExprOp("="));
-      for(let i in flatDMGBuffdetails){
+      for(let idx in flatDMGBuffdetails){
+        let i = Number(idx);
         let detail = flatDMGBuffdetails[i];
         let origRemaining = (detail.consumption != null && detail.remaining != null) ? detail.consumption + detail.remaining : null;
         flatDMGRow.append(mkExprBox(detail.singleFlatDMG, "单次额外伤害", "singleFlatDMG"), mkExprOp("×"));
-        if(origRemaining != null){
+        if(origRemaining != null){// 如果羽毛有次数限制，那么展示消耗次数计算过程
           flatDMGRow.append(mkExprOp("min("), mkExprBox(origRemaining, "触发前剩余次数", "remaining"), mkExprOp(", "),
                             mkExprBox(detail.hitnum, "技能段数", "hitnum"), mkExprOp("×"), 
                             mkExprBox(detail.repetitionCount, "重复次数", "repetitionCount"), mkExprOp(")"))
@@ -2051,7 +2078,7 @@ function display_damage_details(wrapDetail, result){
           flatDMGRemainingRow.append(mkExprOp(detail.name + ": "), mkExprBox(detail.consumption, "消耗次数", "consumption"),
                                      mkExprOp(", "), mkExprBox(detail.remaining, "剩余次数", "remaining"), mkExprOp("; "))
         }
-        else{
+        else{//没有次数限制，直接等于 技能段数x重复次数
           flatDMGRow.append(mkExprBox(detail.hitnum, "技能段数", "hitnum"), mkExprOp("×"), 
                             mkExprBox(detail.repetitionCount, "重复次数", "repetitionCount"),)
         }
@@ -2064,10 +2091,10 @@ function display_damage_details(wrapDetail, result){
     if(flatDMGRow){exprScroll.appendChild(flatDMGRow)};
     if(flatDMGRemainingRow){exprScroll.appendChild(flatDMGRemainingRow)};
   } else {
-    
+    // 单人伤害：details 以角色ID为键；无触发角色(如反应星扩散:冰)时取第一个键
     const ID = (result.characterID != null) ? result.characterID : Object.keys(result.details)[0];
     exprScroll.appendChild(makeExprRow(EXPR_TERMS[dmgType] || [], result.details[ID] || {}, result.dmg));
-    
+    // 当scaling存在时，额外输出一个基础乘区的计算表达式
     const mainDetail = result.details[ID] ? result.details[ID] : null;
     const scaling = mainDetail ? (mainDetail.scaling ? mainDetail.scaling:null) : null;
     if(scaling){
@@ -2083,20 +2110,21 @@ function display_damage_details(wrapDetail, result){
         }
       }
     }
-    
+    // 当羽毛增益存在时，额外输出羽毛计算表达式
     if(mainDetail){
       let flatDMG = mainDetail.flatDMG > 0 ? mainDetail.flatDMG : null;
-      let flatDMGRow = null; 
-      let flatDMGRemainingRow = null; 
+      let flatDMGRow = null; // 如果羽毛增益存在，额外添加一行展示羽毛
+      let flatDMGRemainingRow = null; // 羽毛的剩余次数展示
       if(flatDMG){
         flatDMGRow = document.createElement("div"); flatDMGRow.className = "expr-row";
         let flatDMGBuffdetails = mainDetail.statBuffDetails["flatDMG"];
         flatDMGRow.append(mkExprBox(mainDetail.flatDMG, MULTIPLIERS["flatDMG"], "flatDMG"), mkExprOp("="));
-        for(let i in flatDMGBuffdetails){
+        for(let idx in flatDMGBuffdetails){
+          let i = Number(idx);
           let detail = flatDMGBuffdetails[i];
           let origRemaining = (detail.consumption != null && detail.remaining != null) ? detail.consumption + detail.remaining : null;
           flatDMGRow.append(mkExprBox(detail.singleFlatDMG, "单次额外伤害", "singleFlatDMG"), mkExprOp("×"));
-          if(origRemaining != null){
+          if(origRemaining != null){// 如果羽毛有次数限制，那么展示消耗次数计算过程
             flatDMGRow.append(mkExprOp("min("), mkExprBox(origRemaining, "触发前剩余次数", "remaining"), mkExprOp(", "),
                               mkExprBox(detail.hitnum, "技能段数", "hitnum"), mkExprOp("×"), 
                               mkExprBox(detail.repetitionCount, "重复次数", "repetitionCount"), mkExprOp(")"))
@@ -2104,7 +2132,7 @@ function display_damage_details(wrapDetail, result){
             flatDMGRemainingRow.append(mkExprOp(detail.name + ": "), mkExprBox(detail.consumption, "消耗次数", "consumption"),
                                       mkExprOp(", "), mkExprBox(detail.remaining, "剩余次数", "remaining"), mkExprOp("; "))
           }
-          else{
+          else{//没有次数限制，直接等于 技能段数x重复次数
             flatDMGRow.append(mkExprBox(detail.hitnum, "技能段数", "hitnum"), mkExprOp("×"), 
                               mkExprBox(detail.repetitionCount, "重复次数", "repetitionCount"),)
           }
@@ -2116,9 +2144,9 @@ function display_damage_details(wrapDetail, result){
     } 
   }
   expressionDiv.appendChild(exprScroll);
-  
+  // #endregion
 
-    
+    // #region ---------- 2. detailDiv：角色面板 + 生效效果（写法同"展示区"） ----------
   const panelID = (result.characterID != null) ? result.characterID : result.onfieldCharacterID;
   const panelChar = characters[panelID];
   const panelDetail = result.details[panelID] || {};
@@ -2129,11 +2157,11 @@ function display_damage_details(wrapDetail, result){
   panelTitle.textContent = `角色面板：${panelChar ? panelChar.name : panelID}`;
   detailDiv.appendChild(panelTitle);
 
-  
+  // 新增：数值与效果左右排版的容器
   const panelGrid = document.createElement("div");
   panelGrid.className = "panel-grid";
-  const statsWrap = document.createElement("div");    
-  const effectsWrap = document.createElement("div");  
+  const statsWrap = document.createElement("div");    // 左：数值
+  const effectsWrap = document.createElement("div");  // 右：生效效果
 
   if(panelStats && panelChar){
     const panelStatBuffDetails = panelDetail.statBuffDetails || {};
@@ -2142,10 +2170,10 @@ function display_damage_details(wrapDetail, result){
     for(let statID of panelChar.displayedStats){
       const subdiv = document.createElement("div"); subdiv.className = "stat";
       const nameDiv = document.createElement("div"); nameDiv.className = "statName"; nameDiv.textContent = STATS[statID];
-      const detailBtn = document.createElement("button"); 
+      const detailBtn = document.createElement("button"); // 详情显示
       detailBtn.className = "detailCell";
       detailBtn.textContent = "详情";
-      detailBtn.onclick = function(){ 
+      detailBtn.onclick = function(){ // 弹出该词条相关的增益效果详情
         show_stat_buff_detail_popup(STATS[statID], build_stat_detail_lines(panelDetail.statBaseDetails, panelStatBuffDetails, statID));
       };
       nameDiv.appendChild(detailBtn);
@@ -2169,13 +2197,13 @@ function display_damage_details(wrapDetail, result){
   panelGrid.append(statsWrap, effectsWrap);
   detailDiv.appendChild(panelGrid);
 
-  
-  
+  // #endregion
+  // ---------- 3. 挂载 ----------
   maindiv.append(expressionDiv, detailDiv);
   wrapDetail.appendChild(maindiv);
 }
 
-function create_damage_display_part(damageId){
+function create_damage_display_part(damageId){// 设置伤害展示区
   const part = document.getElementById(damageId);
   update_team_cost();
   const partSubDiv0 = document.createElement("div");
@@ -2193,7 +2221,7 @@ function create_damage_display_part(damageId){
   beginBtn.textContent = "开始计算";
   partSubDiv0_btnDiv.appendChild(beginBtn);
   partSubDiv0.append(partSubDiv0_subtitleDiv, partSubDiv0_btnDiv);
-  
+  // 计算区
   const partSubDiv1 = document.createElement("div");
   partSubDiv1.className = "card";
   partSubDiv1.style["margin-top"] = "10px";
@@ -2202,7 +2230,7 @@ function create_damage_display_part(damageId){
   const partSubDiv1_h1 = document.createElement("h1");
   partSubDiv1_h1.textContent = `计算表格`;
   partSubDiv1.appendChild(partSubDiv1_h1);
-  
+  // 细节区
   const partSubDiv2 = document.createElement("div");
   partSubDiv2.className = "card";
   partSubDiv2.id = damageDetailDivId;
@@ -2212,10 +2240,46 @@ function create_damage_display_part(damageId){
   partSubDiv2.appendChild(partSubDiv2_h1);
 
   beginBtn.onclick = function(){
-    const [actionArray, totalTime] = get_action_array(characters);
-    const solve = simulate(actionArray, totalTime);
-    subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
-    create_damage_table(partSubDiv1, partSubDiv2, solve);
+    let settingObject = get_settings();
+    let settingsList = settingObject.settingsList, descList = settingObject.descList;
+    const getTotalTime = settingObject.getTotalTime;
+    let n = settingsList.length;
+    let totalDMGs = [], totalTimes = [];
+    partSubDiv1.replaceChildren();
+    for(let i=0; i<n; i++){
+      update_additionalAttributeParams(settingsList[i]);
+      initialize_toUpdateAttributes();
+      initialize_all_attributes();
+      const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters);
+      const solve = simulate(actionArray, totalTime);
+      subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
+      create_damage_table(partSubDiv1, partSubDiv2, solve, descList[i]);
+      // 建立分割线
+      if(n > 1){
+        const separator = document.createElement("hr"); separator.className = "separator-line";
+        partSubDiv1.append(separator);
+      }
+      totalDMGs.push(solve.totalDMG);
+      totalTimes.push(solve.totalTime);
+    }
+    if(n>1){
+      let totalTime = getTotalTime(totalTimes), totalDMG = sum(totalDMGs);
+      let DPS = totalDMG / totalTime;
+      const displayWrap = document.createElement("div");
+      displayWrap.className = "result-display";
+      const text1 = document.createElement("span"); text1.textContent = "流程总伤害";
+      const box1 = document.createElement("div"); box1.className = "result-display-box";
+      box1.textContent = `${totalDMG.toFixed(0)}`;
+      const text2 = document.createElement("span"); text2.textContent = '\u00A0\u00A0\u00A0' + "流程总耗时";
+      const box2 = document.createElement("div"); box2.className = "result-display-box";
+      box2.textContent = `${totalTime.toFixed(2)}`;
+      const text3 = document.createElement("span"); text3.textContent = '\u00A0\u00A0\u00A0' + "流程DPS";
+      const box3 = document.createElement("div"); box3.className = "result-display-box";
+      box3.textContent = `${DPS.toFixed(0)}`;
+      displayWrap.append(text1, box1, text2, box2, text3, box3);
+      partSubDiv1.append(displayWrap);
+    }
+    
   }
   
 
@@ -2228,7 +2292,7 @@ const characterDisplayPartId = "character_display_part";
 const damageDisplayPartId = "damage_display_part";
 
 
-
+// create_character_selection_part(characterSelectionPartId);
 create_character_build_part(characterBuildPartId);
 create_display_part(characterDisplayPartId);
 create_damage_display_part(damageDisplayPartId);

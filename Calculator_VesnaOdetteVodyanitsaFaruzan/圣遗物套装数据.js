@@ -2,6 +2,27 @@
 // 由原 HTML 内联 script 拆分而来；保持原有全局类名/变量名/函数名不变。
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
 // 圣遗物的效果中可能具有参数 isOnly，表示这个效果全局唯一（即同类圣遗物效果只生效一个）
+// 圣遗物尽量不要定义 teamParameters，让角色定义；如果真要定义，请将值都设置成 false （默认不生效）
+
+export function get_artifactSet_ID(artifactSet){// 将角色装备的圣遗物套装组合转化成ID值
+  const ID = artifactSet.map(([set, number]) => [set.ID, number.toString()]).flat().join("_");
+  return ID;
+}
+export function get_artifactSet_name(artifactSet){// 角色装备的圣遗物套装组合的中文描述
+  const name = artifactSet.map(([set, number]) => `${set.name}${number}件套`).join("+");
+  return name;
+}
+export function get_artifactSet_desc_array(artifactSet){// 角色装备的圣遗物套装组合的效果描述构成的列表
+  const allEffects = [];
+  for(let set of artifactSet){
+    if(set[1] >= 4){allEffects.push(...set[0].setEffects[2], ...set[0].setEffects[4])}
+    else if(set[1] >= 2){allEffects.push(...set[0].setEffects[2])};
+  };
+  const decs_array = allEffects.map(item => item.desc+";");
+  return decs_array;
+}
+
+
 
 export class ArtifactSet_ScarletProof{ // 血红之证
   constructor(ID = "ScarletProof", equipperID=undefined, equipperName=equipperID){

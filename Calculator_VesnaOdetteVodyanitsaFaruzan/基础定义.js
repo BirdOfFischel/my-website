@@ -131,13 +131,14 @@ export const ARTIFACT_SUB_STATS = { // 圣遗物副词条，词条 : {label:词�
 export const ARTIFACT_SLOTS = { // 圣遗物部件
     flower:"生之花", plume:"死之羽", sands:"时之沙", goblet:"空之杯", circlet:"理之冠",
 }
-
+export const FLAT_STAT_SET = new Set(["em", "atkf", "deff", "hpf", "atk", "def", "hp", "batk", "bdef", "bhp",
+                                     "levelMult", "flatDMG"]);
 
 // 获得元素共鸣效果
 export function get_elemental_resonance_effects(characters){
     let element_numbers = {pyro:0, hydro:0, electro:0, cryo:0, dendro:0, geo:0, anemo:0};
     let effects = [];
-    Object.values(characters).forEach(item => element_numbers[item.element] += 1);
+    Object.values(characters).forEach(item => {element_numbers[item.element] += 1});
     if(element_numbers.pyro >=2){effects.push({
         ID:"Resonance_FerventFlames", condition:{}, effect:resonance_effect_of_FerventFlames,
         isNet : true, isPermanent:true, desc:"双火共鸣：全队攻击力提升25%"
@@ -154,16 +155,22 @@ export function get_elemental_resonance_effects(characters){
         ID:"Resonance_EnduringRock", condition:{isOnfield:true}, effect:resonance_effect_of_EnduringRock,
         isNet : true, isPermanent:false, desc:"双岩共鸣：前台元素增伤15%，岩元素减抗20%(简化)"
     })};
+    if(element_numbers.anemo >= 2){effects.push({
+        ID:"Resonance_ImpetuousWinds", condition:{}, effect:resonance_effect_of_ImpetuousWinds,
+        isNet : true, isPermanent:true, desc:"双风共鸣：减少所有角色5%的冷却时间"
+    })}
     if(element_numbers.dendro >=2){effects.push({
         ID:"Resonance_SprawlingGreenery", condition:{}, effect:resonance_effect_of_SprawlingGreenery,
-        isNet : true, isPermanent:true, desc:"双草共鸣：全队元素精通提升50"
-    })};
+        isNet : true, isPermanent:true, desc:"双草共鸣：全队元素精通提升50"},
+    )};
     return effects;
 };
-function resonance_effect_of_FerventFlames(teamNetAttributes, action){return {atkp:0.25};};
-function resonance_effect_of_SoothingWater(teamNetAttributes, action){return {hpp:0.25};};
-function resonance_effect_of_ShatteringIce(teamNetAttributes, action){return {cr:0.15};};
-function resonance_effect_of_EnduringRock(teamNetAttributes, action){
+function resonance_effect_of_FerventFlames(teamInitialAttributes, teamNetAttributes, action, activated = false){return {atkp:0.25};};
+function resonance_effect_of_SoothingWater(teamInitialAttributes, teamNetAttributes, action, activated = false){return {hpp:0.25};};
+function resonance_effect_of_ShatteringIce(teamInitialAttributes, teamNetAttributes, action, activated = false){return {cr:0.15};};
+function resonance_effect_of_EnduringRock(teamInitialAttributes, teamNetAttributes, action, activated = false){
     return {pyroDMG:0.15, hydroDMG:0.15, electroDMG:0.15, cryoDMG:0.15, dendroDMG:0.15, geoDMG:0.15, anemoDMG:0.15, physicalDMG:0.15, geoDeRes:0.2};
 };
-function resonance_effect_of_SprawlingGreenery(teamNetAttributes, action){return {em:50};};  //双草共鸣效果还和反应相关，后续要用再改
+function resonance_effect_of_SprawlingGreenery(teamInitialAttributes, teamNetAttributes, action, activated = false){return {em:50};};  //双草共鸣效果还和反应相关，后续要用再改
+
+function resonance_effect_of_ImpetuousWinds(teamInitialAttributes, teamNetAttributes, action, activated = false){return {CDReduction:0.05}};

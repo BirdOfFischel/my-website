@@ -1,7 +1,22 @@
 // 武器数据库：武器类与武器效果函数
 // 由原 HTML 内联 script 拆分而来；保持原有全局类名/变量名/函数名不变。
 // 依赖关系：本文件需按主 HTML 中的 script 引用顺序加载。
+// 武器尽量不要定义 teamParameters，让角色定义；如果真要定义，请将值都设置成 false（默认不生效）
+// 武器的效果中可能具有参数 isOnly，表示这个效果全局唯一（即同类武器效果只生效一个）
 
+import {STATS, ELEMENTS, FLAT_STAT_SET} from "./基础定义.js";
+
+export function get_weapon_desc_array(weapon){
+  const allEffects = [];
+  allEffects.push(...weapon.effects);
+  const valueText = get_stat_value_string(weapon.stat, weapon.statValue);
+  const decs_array = [`提供${weapon.batk}白值、${valueText}${weapon.statLabel}; `];
+  decs_array.push(...allEffects.map(item => item.desc+";"))
+  return decs_array;
+}
+function get_stat_value_string(stat, value){ // 获得词条值的字符串形式
+  return FLAT_STAT_SET.has(stat) ?  value.toFixed(0)+"": (value*100).toFixed(1)+"%";
+}
 
 // #region 单手剑 
 export class Weapon_BeyondtheChrysalis{// 单手剑：蝶变
@@ -148,7 +163,7 @@ export class Weapon_NewBough{// 单手剑：新枝
       get desc() {return `新枝效果2：当装备者${self.equipperName}处于星烁状态时，攻击额外提升${4.5+1.5*self.rank}%，星烁反应伤害增加${6+2*self.rank}%`}},
     ];
     this.parameters = {};
-    this.teamParameters = {isStellarSwirl:false, isStellarConduct:false};
+    this.teamParameters = {};
     this.variables = {};
   };
   be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
@@ -168,7 +183,6 @@ function effect_1_of_weapon_NewBough(teamInitialAttributes, teamNetAttributes, a
 }
 function check_effect_2_of_weapon_NewBough(teamInitialAttributes, charID, action){
   let mark = false;
-  let result = {};
   const attr = teamInitialAttributes[charID];
   if(attr.isStellarSwirl || attr.isStellarConduct){mark = true};
   return mark;
@@ -236,14 +250,14 @@ export class Weapon_FinaleoftheDeep{// 单手剑：海渊终曲
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_1_of_weapon_FinaleoftheDeep(teamInitAttr, teamAttr, action, this, activated),
       isNet: true, isPermanent: false,
       get desc() {return `海渊终曲效果1：装备者${self.equipperName}提升${9+3*self.rank}%的攻击力`}},
-      {ID: this.ID + "_Effect", condition: {characterIDs:[this.equipperID], isOnfield:true},
+      {ID: this.ID + "_Effect", condition: {characterIDs:[this.equipperID], isOnfield:true, isHealed:true},
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_2_of_weapon_FinaleoftheDeep(teamInitAttr, teamAttr, action, this, activated),
       isNet: false, isPermanent: false,
       get desc() {return `海渊终曲效果2：当装备者${self.equipperName}受到治疗清除最大生命值25%的生命之契时，提升清除值${1.8+0.6*self.rank}%的攻击力，
         至多提升${112.5+37.5*self.rank}点攻击力`}},
     ];
     this.parameters = {};
-    this.teamParameters = {ishealed:false};
+    this.teamParameters = {};
     this.variables = {};
   };
   be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
@@ -287,7 +301,7 @@ export class Weapon_HereticsMoltenBlade{// 单手剑：熔猎异端之刃
       isNet: true, isPermanent: false,
       get desc() {return `熔猎异端之刃效果：装备者${self.equipperName}释放元素战技后，提升${27+9*self.rank}%的攻击力`}},
     ];
-    this.parameters = {toCastE:true};
+    this.parameters = {toCastE:false};
     this.teamParameters = {};
     this.variables = {};
   };
@@ -352,7 +366,7 @@ export class Weapon_HymnoftheMaelstrom {// 法器：漩流颂歌
                             的攻击力加成，至多${18+6*self.rank}%，触发冻结反应或星扩散反应时效果额外提高75%`}},
     ];
     this.parameters = {}; // 自己效果要用的参数
-    this.teamParameters = {isStellarSwirl:true, isFrozen:true}; // 全队吃到自己效果要用的参数
+    this.teamParameters = {}; // 全队吃到自己效果要用的参数
     this.variables = {}; // 自己效果计算时要用的变量
   }
   be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
@@ -398,7 +412,7 @@ export class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
       get desc() {return `讨龙英杰谭效果：切换角色时，提升下一个登场角色${18 + self.rank * 6}%的攻击力`}},
     ];
     this.parameters = {}; // 自己效果要用的参数
-    this.teamParameters = {ThrillingTalesofDragonSlayersTarget:false}; // 全队吃到自己效果要用的参数
+    this.teamParameters = {ThrillingTalesofDragonSlayersTarget:false}; // 讨龙作用的对象
     this.variables = {}; // 自己效果计算时要用的变量
   }
   be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
@@ -446,7 +460,7 @@ export class Weapon_BreezeborneRefrain{ // 弓：柔风游弦
       get desc() {return `柔风游弦效果2：给全队${18 + self.rank * 6}%的星烁反应伤害加成`}},
     ];
     this.parameters = {}; // 自己效果要用的参数
-    this.teamParameters = {ThrillingTalesofDragonSlayersTarget:false}; // 全队吃到自己效果要用的参数
+    this.teamParameters = {}; // 全队吃到自己效果要用的参数
     this.variables = {}; // 自己效果计算时要用的变量
   }
   be_equipped(equipperID, equipperName=equipperID){// 更改装备者，然后将效果中的"equipper"改成对应的装备者ID
