@@ -50,10 +50,10 @@ export function range(start, end) {// 生成范围，start包括而end不包括
 export const EPSILON = 1e-6;
 const minCastingDuration = 0.5; // 最小技能释放时间
 const maxCastingDuration = 3; // 最长技能释放时间
-function assign_details_to_action(action, details){// 将对象 details 合并到 action 中，注意其中对象、列表和集合的合并
+export function assign_details_to_action(action, details){// 将对象 details 合并到 action 中，注意其中对象、列表和集合的合并
   for(let [k, v] of Object.entries(details)){
     if(k === "condition" || k === "parameters"){
-      if(action[k] == undefined){action[k]=v}
+      if(action[k] == undefined){action[k]={...v}}
       else{Object.assign(action[k], v);}
     }
     else if(k === "replacements"){
@@ -399,6 +399,10 @@ function check_effect(effect, teamInitialAttributes, action){// 检测effect是�
 
 
 
+
+
+
+
 /* 模板文件
 const template = {
   name : "珐露珊",
@@ -680,7 +684,7 @@ export const Vesna = {
   /*... 方法 ...*/
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
   get_max_CD(attributes){return 18*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
-  get_onfield_actionsObject(attributes, params = {}){// 获得角色站场时的actions，为对象 {actions, reactions, duration}
+  get_onfield_actionsObject(attributes, params={}, actionDetails={}){// 获得角色站场时的actions，为对象 {actions, reactions, duration}
     const reactionStellarSwirlAnemoOnfieldTalentMeta = {characterID: "Vesna", element:"anemo", rxndmg:"reactionStellarSwirl", 
                                                         ID:"reactionStellarSwirlAnemo", name:"反应星扩散:风", isOnfield:true};
     const reactionStellarSwirlCryoTalentMeta = {characterID: "Vesna", element:"cryo", rxndmg:"reactionStellarSwirl",
@@ -896,9 +900,11 @@ export const Vesna = {
         {talentMeta:reactionStellarSwirlCryoTalentMeta, repetitionCount:5, parameters:{stacks:3}, timestamp:results.duration},
       ];
     results.actions.push(...reactions);
+    // 给actions中所有的元素赋值 details
+    for(let action of results.actions){assign_details_to_action(action, actionDetails)};
     return results;
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}){// 获得角色后台时的actions，为数组
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}, actionDetails={}){// 获得角色后台时的actions，为数组
     return {};
   },
 };
@@ -1137,7 +1143,10 @@ export const Odette = {
   /*... 方法 ...*/
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
   get_max_CD(attributes){return 15*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
-  get_onfield_actionsObject(attributes, params = {}){
+  get_onfield_actionsObject(attributes, params={stacks:0, addedDuration:0, isStellarSwirl:undefined, isStellarConduct:undefined}, 
+                            actionDetails={}){
+    const isStellarSwirl = (params.isStellarSwirl ?? attributes.isStellarSwirl) ?? false;
+    const isStellarConduct = (params.isStellarConduct ?? attributes.isStellarConduct) ?? false;
     const talentTimeDict = {e0:1, e1:1, e2:0.5, q1:1.5, q2:0.5}
     const applyTimestamps = (actions) => {
       let availableKeySet = new Set(Object.keys(talentTimeDict));
@@ -1155,15 +1164,23 @@ export const Odette = {
       actions.push({talentMeta:Odette.talentMetas.q1,}, {talentMeta:Odette.talentMetas.q2,});
     }
     actions.push({talentMeta:Odette.talentMetas.e1_cryo,});
-    if(attributes.isStellarSwirl === true && !attributes.isStellarConduct){actions.push({talentMeta:Odette.talentMetas.e2_swirl,})}
+    if(isStellarSwirl === true && !isStellarConduct){actions.push({talentMeta:Odette.talentMetas.e2_swirl,})}
     else{actions.push({talentMeta:Odette.talentMetas.e2_conduct, parameters:{stacks:params.stacks || 0}})};
     applyTimestamps(actions);
-    const duration = actions.at(-1).timestamp + 10*EPSILON;
+    const duration = actions.at(-1).timestamp + 10*EPSILON + params.addedDuration;
+    // 给actions中所有的元素赋值 details
+    for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration};
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}){
-    const meta1 = attributes.isStellarSwirl ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
-    const meta2 = attributes.isStellarSwirl ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, 
+            params={isStellarSwirl:undefined, isStellarConduct:undefined, segIndices:[]}, actionDetails={}){
+    const isStellarSwirl = (params.isStellarSwirl ?? attributes.isStellarSwirl) ?? false;
+    const isStellarConduct = (params.isStellarConduct ?? attributes.isStellarConduct) ?? false;
+    const meta1Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
+    const meta2Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;         
+
+    const meta1 = (attributes.isStellarSwirl && !attributes.isStellarConduct) ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
+    const meta2 = (attributes.isStellarSwirl && !attributes.isStellarConduct) ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;
     const maxCount = 5, metaInterval = 4; // 每一种伤害都是间隔4秒一次，初始时间不一样
     const firstTS1 = 2, firstTS2 = 4;
     // 获得每种伤害对应的列表
@@ -1175,12 +1192,18 @@ export const Odette = {
       const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, effectSchedules);
       actionsListArray.push(actionsList);
     }
-    // 合并
+    // 合并, 当 params.segIndices 非空时，将其中的 meta1 换成 meta1Rep, meta2 换成 meta2Rep
     const actionsList = [];
     for(let i=0;i<onfieldDurations.length;i++){
       let actions = actionsListArray.reduce((list, cur) => {list.push(...cur[i]); return list}, []);
       // 排序
       sort_actions_by_timestamps(actions);
+      if(params.segIndices.includes(i)){// 替换
+        for(let action of actions){
+          if(action.talentMeta.ID === meta1.ID){action.talentMeta = meta1Rep;}
+          else if(action.talentMeta.ID === meta2.ID){action.talentMeta = meta2Rep;}
+        }
+      }
       if(toMerge){merge_actions_by_ineffectiveEffectIDSet(actions);}
       actionsList.push(actions);
     }
@@ -1385,13 +1408,15 @@ export const Vodyanitsa = {
   /*... 方法 ...*/
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
   get_max_CD(attributes){return 16*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
-  get_onfield_actionsObject(attributes, params = {}){
+  get_onfield_actionsObject(attributes, params={}, actionDetails={}){
     let Qdrt = attributes.toCastQ ? 2 : 0;
     const actions = [{talentMeta:Vodyanitsa.talentMetas.e0, timestamp:1}];
     if(attributes.toCastQ){actions.push({talentMeta:Vodyanitsa.talentMetas.q, condition:{toCastQ:true}, timestamp:1+Qdrt})};
+    // 给actions中所有的元素赋值 details
+    for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration : 1+Qdrt+10*EPSILON,}
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}){
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}, actionDetails={}){
     const maxCount = 6, metaInterval=3, meta = Vodyanitsa.talentMetas.e_off, firstTS=3;
     const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, effectSchedules, toMerge);
     return {actionsList};
@@ -1610,14 +1635,18 @@ export const Faruzan = {
   teamParameters : {},
   variables : {},
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
-  get_max_CD(attributes){return 20*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
-  get_onfield_actionsObject(attributes, params = {}){
+  get_max_CD(attributes){// 角色技能循环的最大CD
+    return attributes.toCastQ ? 20*(1-attributes.stats.CDReduction) : 6*(1-attributes.stats.CDReduction);
+  }, 
+  get_onfield_actionsObject(attributes, params={}, actionDetails={}){
     let chargedrt = attributes.toCastCharge ? 1 : 0;
     let Qdrt = attributes.toCastQ ? 1 : 0;
     const actions = [{talentMeta:Faruzan.talentMetas.e0, timestamp:0.7},];
     if(attributes.toCastCharge){actions.push({talentMeta:Faruzan.talentMetas.charge_special, timestamp:0.7+chargedrt})}
     if(attributes.toCastQ){actions.push({talentMeta:Faruzan.talentMetas.q0, timestamp:0.7+chargedrt+Qdrt},)}
     let duration = Math.max(1, actions.at(-1).timestamp) + 10*EPSILON;
+    // 给actions中所有的元素赋值 details
+    for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration};
   },
   get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params = {element:"cryo"}){
@@ -1781,8 +1810,8 @@ const TravelerCryo = {
   variables : {},
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
   get_max_CD(attributes){return 15*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
-  get_onfield_actionsObject(attributes, params = {}){},
-  get_offfield_actionsObject(attributes, params = {}){},
+  get_onfield_actionsObject(attributes, params={}, actionDetails={}){},
+  get_offfield_actionsObject(attributes, params={}, actionDetails={}){},
 }
 
 

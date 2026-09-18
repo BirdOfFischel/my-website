@@ -133,21 +133,154 @@ function check_character_selection(){// 检查用户选择的角色是否满足�
 
 function get_settings(){
   let settingsList = [
-    {Vesna: {toCastQ:false, ThrillingTalesofDragonSlayersTarget:false}},
     {Vesna: {toCastQ:true, ThrillingTalesofDragonSlayersTarget:true}},
+    {Vesna: {toCastQ:false, ThrillingTalesofDragonSlayersTarget:false}},
   ];
-  let descList = ["薇斯纳无大，且队伍中可能存在的讨龙不生效", "薇斯纳有大，且队伍中若存在讨龙则生效"];
+  let descList = ["薇斯纳有大", "薇斯纳无大"];
+  let buttonNames = ["有大轮", "无大轮"];
+  let totalTimes = [undefined, undefined];
+  let N = settingsList.length;
   // 判断共计总时间（上面两个设置对应两种不同的情况，总时间不一定是二者相加，比如薇斯纳轴长19秒，但讨龙CD有20.83秒）
-  let getTotalTime = (totalTimes) => {return sum(totalTimes)};
   for(let char of Object.values(characters)){
-    if(char.weapon.name === "讨龙英杰谭"){getTotalTime = (totalTimes)=>{return 20.83+sum(totalTimes.slice(1))}; break;}
+    if(char.weapon.name === "讨龙英杰谭"){
+      totalTimes = settingsList.map(item => 21);
+      descList = descList.map(string => string+"且对齐讨龙轴");
+      break;
+    }
   }
-  return {settingsList, descList, getTotalTime};
+  return {settingsList, descList, buttonNames, totalTimes};
 }
 
 
-
 const characters = {"Vesna":Vesna, "Odette":Odette, "Vodyanitsa":Vodyanitsa, "Faruzan":Faruzan,}; // 队伍中的具体角色角色，一般有四个元素
+
+
+function get_action_array(teamInitialAttributes, characters, presetTotalTime=undefined, ){// 给定参与角色及其配置，返回对应的手法列表和总耗时
+  // 先按照 order 排序
+  let orderTocharID = Object.fromEntries(Object.keys(characters).map(charID => [teamInitialAttributes[charID].order, charID]));
+  let orders = Object.keys(characters).map(charID => teamInitialAttributes[charID].order).sort((a,b)=>a-b);
+  const sortedCharIDs = orders.map(o => orderTocharID[o]);
+  const n_chars = sortedCharIDs.length;
+  const onfieldActionsList = [];
+  const swapTimeStamps = [0];
+  const onfieldDurations = [];
+  const maxCDs = [];
+  for(let charID of sortedCharIDs){// 前台
+    const actionsObject = characters[charID].get_onfield_actionsObject(teamInitialAttributes[charID]);
+    onfieldActionsList.push(actionsObject.actions);
+    swapTimeStamps.push(swapTimeStamps.at(-1) + actionsObject.duration);
+    onfieldDurations.push(actionsObject.duration);
+    maxCDs.push(characters[charID].get_max_CD(teamInitialAttributes[charID]));
+  }
+  const origOnfieldDurations = [...onfieldDurations];
+  const totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));
+  onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1);
+  swapTimeStamps[n_chars] = totalTime; // 如果冷却时间长，就把多出来的站场时间给最后一个人（大C）
+  // 更新 onfieldActionsList 中的 timestamp
+  for(let i=0; i<n_chars; i++){
+    let actions = onfieldActionsList[i], startTS = swapTimeStamps[i];
+    for(let action of actions){
+      if(typeof action.timestamp === "number"){action.timestamp += startTS;}
+    }
+  }
+  /* 获得需要的效果持续对象： {效果ID: [起始时间戳，终止时间戳]} {效果ID：[[第一个角色登场时失效范围], ...]},
+     {效果ID：[效果生效的角色ID]}
+  */
+  const effectSchedules = {}, effectIneffectiveRanges = {}, effectTargets = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(characters[charID].weapon.name === "讨龙英杰谭"){// 讨龙
+      for(let effect of characters[charID].weapon.effects){
+        effectSchedules[effect.ID] = [swapTimeStamps[i+1], swapTimeStamps[i+1]+10];
+        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1], 10, onfieldDurations);
+        effectTargets[effect.ID] = [sortedCharIDs[(i+1)%n_chars]];
+      }
+    };
+    if(get_artifactSet_ID(characters[charID].artifactSet) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
+      // 宗室
+      let index = onfieldActionsList[i].findIndex(action => (action.talentMeta.attackType === "burst" && action.timestamp != undefined));
+      let delta = (index >= 0 && typeof onfieldActionsList[i][index].timestamp === "number")? 
+                          (onfieldDurations[i] - onfieldActionsList[i][index].timestamp + swapTimeStamps[i]) : 0;
+      for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
+        effectSchedules[effect.ID] = [swapTimeStamps[i+1]+2*EPSILON-delta, swapTimeStamps[i+1]+2*EPSILON+12-delta]; // EPSILON保证珐露珊自己大招吃不到宗室
+        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1]+2*EPSILON-delta, 12, onfieldDurations);
+        effectTargets[effect.ID] = sortedCharIDs;
+      }
+    };
+  }
+  /* 给 actions 附加细节 */
+  for(let idx in sortedCharIDs){
+    let i = Number(idx);
+    for(let effectID of Object.keys(effectIneffectiveRanges)){
+      if(effectTargets[effectID].includes(sortedCharIDs[i])){
+        const set = new Set([effectID]);
+        for(let [leftTS, rightTS] of effectIneffectiveRanges[effectID][i]){
+          assign_details_to_actions_between_timestamps(onfieldActionsList[i], {ineffectiveEffectIDSet:set}, leftTS, rightTS);
+        }
+      }
+    }
+  }
+  /* 获得后台行为和反应 */
+  const offfieldActionsList = sortedCharIDs.map(k=>[]);
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i], char = characters[charID];
+    const tempEffectSchedules = {};
+    for(let effectID of Object.keys(effectTargets)){ // 角色只处理受影响的效果
+      if(effectTargets[effectID].includes(charID)){
+        tempEffectSchedules[effectID] = effectSchedules[effectID];
+      }
+    }
+    const charOfffieldObject = char.get_offfield_actionsObject(teamInitialAttributes[charID], i, onfieldDurations, 
+                                                               tempEffectSchedules, false);
+    const actionsList = charOfffieldObject.actionsList || sortedCharIDs.map(k=>[]);
+    for(let j =0; j<n_chars; j++){
+      offfieldActionsList[j].push(...actionsList[j]);
+    }
+  }
+  // 排序
+  for(let j =0; j<n_chars; j++){
+    sort_actions_by_timestamps(offfieldActionsList[j]);
+  }
+  /* 单独处理沃雅妮莎的领唱和重唱效果 */
+  // 沃雅妮莎的领唱效果
+  let effectDetails = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
+      let effects = [Vodyanitsa.effects[1]];
+      for(let j=0; j<effects.length; j++){
+        let effect = effects[j], effectID = effect.ID;
+        effectDetails[effectID] = {};
+        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 25];
+        effectDetails[effectID].effect = effect;
+      }
+    }
+  }
+  assign_detials_to_segment_actions(onfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, false);
+  // 沃雅妮莎的重唱效果
+  effectDetails = {};
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
+      let effects = [Vodyanitsa.effects[3]];
+      for(let j=0; j<effects.length; j++){
+        let effect = effects[j], effectID = effect.ID;
+        effectDetails[effectID] = {};
+        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 10];
+        effectDetails[effectID].effect = effect;
+      }
+    }
+  }
+  assign_detials_to_segment_actions(offfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, true);
+  // 拼接
+  const actions = [];
+  for(let idx in sortedCharIDs){
+    let i = Number(idx);
+    actions.push({talentMeta:characters[sortedCharIDs[i]].talentMetas.swap});
+    actions.push(...onfieldActionsList[i], ...offfieldActionsList[i]);
+  }
+  return [actions, totalTime];
+};
 
 
 
@@ -610,139 +743,6 @@ function get_displayed_character_attributes(characterID, isOnfield){ // 得到�
 
 
 /*伤害计算函数部分*/
-
-function get_action_array(teamInitialAttributes, characters){// 给定参与角色及其配置，返回对应的手法列表和总耗时
-  // 先按照 order 排序
-  let orderTocharID = Object.fromEntries(Object.keys(characters).map(charID => [teamInitialAttributes[charID].order, charID]));
-  let orders = Object.keys(characters).map(charID => teamInitialAttributes[charID].order).sort((a,b)=>a-b);
-  const sortedCharIDs = orders.map(o => orderTocharID[o]);
-  const n_chars = sortedCharIDs.length;
-  const onfieldActionsList = [];
-  const swapTimeStamps = [0];
-  const onfieldDurations = [];
-  const maxCDs = [];
-  for(let charID of sortedCharIDs){// 前台
-    const actionsObject = characters[charID].get_onfield_actionsObject(teamInitialAttributes[charID]);
-    onfieldActionsList.push(actionsObject.actions);
-    swapTimeStamps.push(swapTimeStamps.at(-1) + actionsObject.duration);
-    onfieldDurations.push(actionsObject.duration);
-    maxCDs.push(characters[charID].get_max_CD(teamInitialAttributes[charID]));
-  }
-  const origOnfieldDurations = [...onfieldDurations];
-  const totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1));
-  onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1);
-  swapTimeStamps[n_chars] = totalTime; // 如果冷却时间长，就把多出来的站场时间给最后一个人（大C）
-  // 更新 onfieldActionsList 中的 timestamp
-  for(let i=0; i<n_chars; i++){
-    let actions = onfieldActionsList[i], startTS = swapTimeStamps[i];
-    for(let action of actions){
-      if(typeof action.timestamp === "number"){action.timestamp += startTS;}
-    }
-  }
-  /* 获得需要的效果持续对象： {效果ID: [起始时间戳，终止时间戳]} {效果ID：[[第一个角色登场时失效范围], ...]},
-     {效果ID：[效果生效的角色ID]}
-  */
-  const effectSchedules = {}, effectIneffectiveRanges = {}, effectTargets = {};
-  for(let idx in sortedCharIDs){
-    let i = Number(idx), charID = sortedCharIDs[i];
-    if(characters[charID].weapon.name === "讨龙英杰谭"){// 讨龙
-      for(let effect of characters[charID].weapon.effects){
-        effectSchedules[effect.ID] = [swapTimeStamps[i+1], swapTimeStamps[i+1]+10];
-        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1], 10, onfieldDurations);
-        effectTargets[effect.ID] = [sortedCharIDs[(i+1)%n_chars]];
-      }
-    };
-    if(get_artifactSet_ID(characters[charID].artifactSet) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
-      // 宗室
-      let index = onfieldActionsList[i].findIndex(action => (action.talentMeta.attackType === "burst" && action.timestamp != undefined));
-      let delta = (index >= 0 && typeof onfieldActionsList[i][index].timestamp === "number")? 
-                          (onfieldDurations[i] - onfieldActionsList[i][index].timestamp + swapTimeStamps[i]) : 0;
-      for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
-        effectSchedules[effect.ID] = [swapTimeStamps[i+1]+2*EPSILON-delta, swapTimeStamps[i+1]+2*EPSILON+12-delta]; // EPSILON保证珐露珊自己大招吃不到宗室
-        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1]+2*EPSILON-delta, 12, onfieldDurations);
-        effectTargets[effect.ID] = sortedCharIDs;
-      }
-    };
-  }
-  /* 给 actions 附加细节 */
-  for(let idx in sortedCharIDs){
-    let i = Number(idx);
-    for(let effectID of Object.keys(effectIneffectiveRanges)){
-      if(effectTargets[effectID].includes(sortedCharIDs[i])){
-        const set = new Set([effectID]);
-        for(let [leftTS, rightTS] of effectIneffectiveRanges[effectID][i]){
-          assign_details_to_actions_between_timestamps(onfieldActionsList[i], {ineffectiveEffectIDSet:set}, leftTS, rightTS);
-        }
-      }
-    }
-  }
-  /* 获得后台行为和反应 */
-  const offfieldActionsList = sortedCharIDs.map(k=>[]);
-  for(let idx in sortedCharIDs){
-    let i = Number(idx), charID = sortedCharIDs[i], char = characters[charID];
-    const tempEffectSchedules = {};
-    for(let effectID of Object.keys(effectTargets)){ // 角色只处理受影响的效果
-      if(effectTargets[effectID].includes(charID)){
-        tempEffectSchedules[effectID] = effectSchedules[effectID];
-      }
-    }
-    const charOfffieldObject = char.get_offfield_actionsObject(teamInitialAttributes[charID], i, onfieldDurations, 
-                                                               tempEffectSchedules, false);
-    const actionsList = charOfffieldObject.actionsList || sortedCharIDs.map(k=>[]);
-    for(let j =0; j<n_chars; j++){
-      offfieldActionsList[j].push(...actionsList[j]);
-    }
-  }
-  // 排序
-  for(let j =0; j<n_chars; j++){
-    sort_actions_by_timestamps(offfieldActionsList[j]);
-  }
-  /* 单独处理沃雅妮莎的领唱和重唱效果 */
-  // 沃雅妮莎的领唱效果
-  let effectDetails = {};
-  for(let idx in sortedCharIDs){
-    let i = Number(idx), charID = sortedCharIDs[i];
-    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
-      let effects = [Vodyanitsa.effects[1]];
-      for(let j=0; j<effects.length; j++){
-        let effect = effects[j], effectID = effect.ID;
-        effectDetails[effectID] = {};
-        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 25];
-        effectDetails[effectID].effect = effect;
-      }
-    }
-  }
-  assign_detials_to_segment_actions(onfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, false);
-  // 沃雅妮莎的重唱效果
-  effectDetails = {};
-  for(let idx in sortedCharIDs){
-    let i = Number(idx), charID = sortedCharIDs[i];
-    if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
-      let effects = [Vodyanitsa.effects[3]];
-      for(let j=0; j<effects.length; j++){
-        let effect = effects[j], effectID = effect.ID;
-        effectDetails[effectID] = {};
-        effectDetails[effectID].effectSchedules = [swapTimeStamps[i], swapTimeStamps[i]+20, 10];
-        effectDetails[effectID].effect = effect;
-      }
-    }
-  }
-  assign_detials_to_segment_actions(offfieldActionsList, swapTimeStamps, teamInitialAttributes, effectDetails, true);
-  // 拼接
-  const actions = [];
-  for(let idx in sortedCharIDs){
-    let i = Number(idx);
-    actions.push({talentMeta:characters[sortedCharIDs[i]].talentMetas.swap});
-    actions.push(...onfieldActionsList[i], ...offfieldActionsList[i]);
-  }
-  return [actions, totalTime];
-};
-
-
-
-
-
-
 
 
 const enemyLevel = 110, enemyRes = {pyro:0.10, hydro:0.10, electro:0.10, cryo:0.10, dendro:0.10, geo:0.10, anemo:0.10};
@@ -1951,6 +1951,7 @@ function create_damage_table(wrapComputation, wrapDetail, solve, desc = "计算�
   displayWrap.append(text1, box1, text2, box2);
   wrapComputation.appendChild(displayWrap);
   // #endregion
+  return [wrapComputation_h1, tableWrap, displayWrap];
 } 
 
 
@@ -2242,28 +2243,50 @@ function create_damage_display_part(damageId){// 设置伤害展示区
   beginBtn.onclick = function(){
     let settingObject = get_settings();
     let settingsList = settingObject.settingsList, descList = settingObject.descList;
-    const getTotalTime = settingObject.getTotalTime;
+    const presetTotalTimes = settingObject.totalTimes;
+    const buttonNames = settingObject.buttonNames;
     let n = settingsList.length;
     let totalDMGs = [], totalTimes = [];
+    subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
     partSubDiv1.replaceChildren();
+    // 先画按钮
+    const buttonDiv = document.createElement("span"); 
+    partSubDiv1.appendChild(buttonDiv);
+    const tableElementsList = [], btnList = [];
     for(let i=0; i<n; i++){
+      const btn = document.createElement("button"); btn.className = "btn"; btn.textContent = buttonNames[i];
+      buttonDiv.appendChild(btn);
+      btnList.push(btn);
       update_additionalAttributeParams(settingsList[i]);
       initialize_toUpdateAttributes();
       initialize_all_attributes();
-      const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters);
+      const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters, presetTotalTimes[i]);
       const solve = simulate(actionArray, totalTime);
-      subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
-      create_damage_table(partSubDiv1, partSubDiv2, solve, descList[i]);
-      // 建立分割线
-      if(n > 1){
-        const separator = document.createElement("hr"); separator.className = "separator-line";
-        partSubDiv1.append(separator);
+      const tableElements = create_damage_table(partSubDiv1, partSubDiv2, solve, descList[i]);
+      if(i !== 0){// 默认显示第一个，后续的全部隐藏
+        for(let element of tableElements){
+          element.classList.add("hidden");
+        }
       }
+      tableElementsList.push(tableElements);
       totalDMGs.push(solve.totalDMG);
       totalTimes.push(solve.totalTime);
     }
+    // 设置按钮的效果：切换表格的隐藏
+    for(let i = 0; i < n; i++){
+      btnList[i].onclick = function(){
+        for(let element of tableElementsList[i]){element.classList.remove("hidden");}
+        for(let j = 0; j<n; j++){
+          if(j !== i){for(let element of tableElementsList[j]){element.classList.add("hidden");}}
+        }
+      }
+    }
     if(n>1){
-      let totalTime = getTotalTime(totalTimes), totalDMG = sum(totalDMGs);
+      // 建立分割线
+      const separator = document.createElement("hr"); separator.className = "separator-line";
+      partSubDiv1.append(separator);
+
+      let totalTime = sum(totalTimes), totalDMG = sum(totalDMGs);
       let DPS = totalDMG / totalTime;
       const displayWrap = document.createElement("div");
       displayWrap.className = "result-display";
