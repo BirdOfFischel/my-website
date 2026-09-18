@@ -2247,6 +2247,7 @@ function create_damage_display_part(damageId){// 设置伤害展示区
     const buttonNames = settingObject.buttonNames;
     let n = settingsList.length;
     let totalDMGs = [], totalTimes = [];
+    update_team_cost();
     subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
     partSubDiv1.replaceChildren();
     // 先画按钮
