@@ -1,6 +1,7 @@
 export const ELEMENTS = {
     pyro :  "火元素", hydro : "水元素", electro : "雷元素", cryo : "冰元素", 
-    dendro : "草元素", geo : "岩元素", anemo : "风元素", physical : "物理"
+    dendro : "草元素", geo : "岩元素", anemo : "风元素", physical : "物理",
+    none : "无",
 };
 export const REACTIONS = {
     vaporize : "蒸发", melt : "融化", overload : "超载", superconduct : "超导", 
@@ -21,6 +22,38 @@ export const REACTION_DAMAGES = {
     directStellarConduct : "直伤星超导", directStellarSwirl : "直伤星扩散", 
     reactionStellarSwirl : "反应星扩散",
 };
+
+export function get_reaction_damage_element(rxndmg, appliedElement, auraElement){
+    switch(rxndmg){
+        case "none": {return appliedElement;}
+        case "vaporize": {return appliedElement;}
+        case "melt": {return appliedElement;}
+        case "overload": {return "pyro";}
+        case "superconduct": {return "cryo";}
+        case "swirl": {return auraElement;}
+        case "electrocharged": {return "electro";}
+        case "shatter": {return "physical";}
+        case "burning": {return "pyro";}
+        case "bloom": {return "dendro";}
+        case "hyperbloom": {return "dendro";}
+        case "burgeon": {return "dendro";}
+        case "aggravate": {return "electro";}
+        case "spread": {return "dendro";}
+        case "directLunarCharged": {return "electro";}
+        case "directLunarBloom": {return "dendro";}
+        case "directLunarCrystallize": {return "geo";}
+        case "reactionLunarCharged": {return "electro";}
+        case "reactionLunarCrystallize": {return "geo";}
+        case "directStellarConduct": {return "cryo";}
+        case "directStellarSwirl": {return appliedElement;}
+        case "reactionStellarSwirl": {
+            if(appliedElement === "anemo"){return "anemo"}
+            else{return "cryo"}
+        }
+    }
+}
+
+
 export const CATALYZE_SET = new Set(["aggravate", "spread"]); // 激化反应类别
 export const TRANSFORMATIVE_SET = new Set(["overload", "superconduct", "swirl", "electrocharged", "shatter", "burning",
                                     "bloom", "hyperbloom", "burgeon"]) // 剧变反应

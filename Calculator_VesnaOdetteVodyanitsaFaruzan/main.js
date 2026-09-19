@@ -36,8 +36,8 @@ import {
   ArtifactSet_NoblesseOblige,
 } from "./圣遗物套装数据.js";
 import { check_action_condition, get_effect_segment_ineffective_ranges,
-  assign_details_to_actions_between_timestamps, EPSILON,
-  assign_detials_to_segment_actions, sort_actions_by_timestamps, sum,
+  assign_details_to_actions_between_timestamps, EPSILON, assign_details_to_action,
+  assign_detials_to_segment_actions, sort_actions_by_timestamps, sum, find_action_index_by_smaller_timestamp,
   Vesna, Odette, Vodyanitsa, Faruzan } from "./角色数据.js";
 
 
@@ -131,57 +131,304 @@ function check_character_selection(){// 检查用户选择的角色是否满足�
   return {isPass, text};
 };
 
-function get_settings(){
-  let settingsList = [
-    {Vesna: {toCastQ:true, ThrillingTalesofDragonSlayersTarget:true}},
-    {Vesna: {toCastQ:false, ThrillingTalesofDragonSlayersTarget:false}},
-  ];
-  let descList = ["薇斯纳有大", "薇斯纳无大"];
-  let buttonNames = ["有大轮", "无大轮"];
-  let totalTimes = [undefined, undefined];
-  let N = settingsList.length;
-  // 判断共计总时间（上面两个设置对应两种不同的情况，总时间不一定是二者相加，比如薇斯纳轴长19秒，但讨龙CD有20.83秒）
+function get_configs(characters){
+  /* 返回一个object，包含 {start:{}, cycle:{}, end:{}}, start为首轮，cycle为循环轮，end为尾轮  
+    每轮对应的对象中包含：
+      attrParamsList: [{charID : {具体内容}}], 用于更新 additionalAttributeParams 的对象；
+      onfieldActionParamsList : [{charID : {具体params}}]，用于生成角色前台行为的 params 参数
+      onfieldActionDetailsList : [{charID : {具体details}}]，用于给角色前台行为附加的 details 参数
+      offfieldActionParamsList : [{charID : {segIndex: 具体params,}}]，用于生成角色后台行为的 params 参数, segIndex为具体作用的段索引
+      offfieldActionDetailsList : [{charID : {segIndex: 具体details}}]，用于给角色后台行为附加的 details 参数, segIndex为具体作用的段索引
+      descList: [描述1, ...]，与 attrParamsList 中元素对应的描述
+      totalTimes: [t1, ...]，与 attrParamsList 中元素对应的总耗时
+      buttonNames: [name1, ..., ]，与 attrParamsList 中元素对应的按钮名称
+      cycleCounts: [次数1，...]，循环次数，表示对应的 attrParams 在整个流程中循环了几次
+  */
+  // 确认一些参数
+  const configs = {start:{} , cycle:{}, end:{}};
+  const orders = Object.keys(characters).map(k => initialAdditionalAttributeParams[k].order); // 初始定义的角色切换顺序
+  const sortedCharIDs = get_sorted_character_IDs(Object.keys(characters), orders);
+  const notOnfieldyetCharIDsDict = {};
+  for(let i=0; i<sortedCharIDs.length;i++){
+    notOnfieldyetCharIDsDict[sortedCharIDs[i]] = sortedCharIDs.slice(i+1);
+  }
+  const elementNumbers = Object.fromEntries(Object.keys(ELEMENTS).map(k => [k, 0]));
+  for(let char of Object.values(characters)){elementNumbers[char.element] += 1};
+  const isDoubleAnemo = (elementNumbers.anemo >= 2), isDoubleCryo = (elementNumbers.cryo >= 2);
+  const energyWeaponNameSet = new Set(["蝶变", "白湖冬羽"]);
+  let withDragon = false, withEnergyWeapon = false;
   for(let char of Object.values(characters)){
-    if(char.weapon.name === "讨龙英杰谭"){
-      totalTimes = settingsList.map(item => 21);
-      descList = descList.map(string => string+"且对齐讨龙轴");
-      break;
+    if(char.weapon.name === "讨龙英杰谭"){withDragon = true;}
+    if(char.ID === sortedCharIDs.at(-1) && energyWeaponNameSet.has(char.weapon.name)){withEnergyWeapon = true;}
+  }
+  const sortedCharNonpermanentEffectIDSets = sortedCharIDs.reduce((results, ID)=>{
+    results[ID] = get_character_all_nonpermanent_effect_ID_set(ID);
+    return results;
+  }, {})
+
+  // #region 起始轮
+  const start_attrParamsList = [// 所有角色都不能放大招
+    {Vesna: {toCastE:true, toCastQ:false, ThrillingTalesofDragonSlayersTarget:true}, // 首轮卡掉讨龙
+     Odette: {toCastE:true, toCastQ:false,},
+     Vodyanitsa: {toCastE:true, toCastQ:false,},
+     Faruzan: {toCastE:true, toCastCharge:true, toCastQ:false,}
+    }
+  ];
+  const start_onfieldActionParamsList = [
+    {Odette:{addedDuration:1}},  // 奥黛塔第一轮手法为 奥->珐->奥->沃，确保第一轮奥打出星扩散，时长+1秒切人
+  ];
+  const start_offfieldActionParamsList = [{}];
+  const start_onfieldActionDetailsList = [{},];
+  if(characters["Odette"].constellation < 6){
+    start_onfieldActionDetailsList[0].Odette = {ineffectiveEffectIDSet: new Set(["Odette_Passive1_2"])};
+  }
+  const start_offfieldActionDetailsList = [{}];
+  const start_descList = ["首轮"];
+  const start_totalTimes = [undefined]; // 表示等于计算结果，不额外赋值
+  const start_buttonNames = ["首轮"];
+  const start_n = start_attrParamsList.length;
+  // 对于details，需要考虑首轮中先出场的角色吃不到后出场的角色buff
+  const n_seg = sortedCharIDs.length;
+  const additionalIneffectiveEffectIDSets = {};
+  for(let i=0; i<n_seg; i++){
+    let charID = sortedCharIDs[i];
+    let sets = notOnfieldyetCharIDsDict[charID].map(ID => get_character_all_nonpermanent_effect_ID_set(ID));
+    additionalIneffectiveEffectIDSets[i] = merge_multipler_sets(sets);
+  }
+  for(let i=0; i<start_n; i++){
+    let onfieldDetails = start_onfieldActionDetailsList[i], offfieldDetails = start_offfieldActionDetailsList[i];
+    for(let idx in sortedCharIDs){
+      let j = Number(idx), charID = sortedCharIDs[j];
+      onfieldDetails[charID] = onfieldDetails[charID] || {}; offfieldDetails[charID] = offfieldDetails[charID] || {};
+      assign_details_to_action(onfieldDetails[charID], {ineffectiveEffectIDSet:additionalIneffectiveEffectIDSets[j]});
+      // 后台行为的 details 按键为段索引，因此对每一段都附加同样的屏蔽集合
+      offfieldDetails[charID] = {};
+      for(let seg=0; seg<n_seg; seg++){
+        offfieldDetails[charID][seg] = {ineffectiveEffectIDSet: additionalIneffectiveEffectIDSets[seg]};
+      }
+    } 
+  }
+  // 赋值
+  configs.start = {
+    attrParamsList: start_attrParamsList, 
+    onfieldActionParamsList: start_onfieldActionParamsList,
+    offfieldActionParamsList: start_offfieldActionParamsList,
+    onfieldActionDetailsList: start_onfieldActionDetailsList,
+    offfieldActionDetailsList: start_offfieldActionDetailsList,
+    descList: start_descList,
+    totalTimes: start_totalTimes,
+    buttonNames : start_buttonNames,
+    cycleCounts: [1],
+  }
+  
+  // #endregion
+
+
+  // #region 循环轮
+    // 判断是每轮开大还是两轮一大（由于开局卡掉讨龙，有大轮必有讨龙）
+  let cycle_attrParamsList, cycle_descList, cycle_buttonNames;
+  if(isDoubleAnemo || withEnergyWeapon){// 有充能武器或者双风则每轮开大
+    if(withDragon){// 有讨龙则需要区分
+      cycle_attrParamsList = [
+        { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+        { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:false},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+      ];
+      cycle_descList = ["有大有讨龙轮", "有大无讨龙轮"];
+      cycle_buttonNames = ["有大有讨龙", "有大无讨龙"];
+    }
+    else{
+      cycle_attrParamsList = [
+        { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+      ];
+      cycle_descList = ["每轮有大"];
+      cycle_buttonNames = ["每轮有大"];
     }
   }
-  return {settingsList, descList, buttonNames, totalTimes};
+  else{// 两轮一大
+    if(withDragon){// 有讨龙则需要区分
+      cycle_attrParamsList = [
+        { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+        { Vesna: {toCastE:true, toCastQ:false, ThrillingTalesofDragonSlayersTarget:false},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+      ];
+      cycle_descList = ["有大有讨龙轮", "无大无讨龙轮"];
+      cycle_buttonNames = ["有大有讨龙", "无大无讨龙"];
+    }
+    else{
+      cycle_attrParamsList = [
+        { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+        { Vesna: {toCastE:true, toCastQ:false, ThrillingTalesofDragonSlayersTarget:true},
+          Odette: {toCastE:true, toCastQ:false,},
+          Vodyanitsa: {toCastE:true, toCastQ:false,},
+          Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+        },
+      ];
+      cycle_descList = ["有大轮", "无大轮"];
+      cycle_buttonNames = ["有大轮", "无大轮"];
+    }
+  }
+  const cycle_n = cycle_attrParamsList.length;
+  const cycle_onfieldActionParamsList = cycle_attrParamsList.map(v=>{return {}});
+  const cycle_offfieldActionParamsList = cycle_attrParamsList.map(v=>{return {}});
+  const cycle_onfieldActionDetailsList = cycle_attrParamsList.map(v=>{return {}});
+  const cycle_offfieldActionDetailsList = cycle_attrParamsList.map(v=>{return {}});
+  const cycle_totalTimes = cycle_attrParamsList.map(v=>undefined);
+  const cycle_cycleCounts = (cycle_n === 1)? [5] : [Math.ceil(5/cycle_n), Math.floor(5/cycle_n)];
+  // 赋值
+  configs.cycle = {
+    attrParamsList: cycle_attrParamsList, 
+    onfieldActionParamsList: cycle_onfieldActionParamsList,
+    offfieldActionParamsList: cycle_offfieldActionParamsList,
+    onfieldActionDetailsList: cycle_onfieldActionDetailsList,
+    offfieldActionDetailsList: cycle_offfieldActionDetailsList,
+    descList: cycle_descList,
+    totalTimes: cycle_totalTimes,
+    buttonNames : cycle_buttonNames,
+    cycleCounts: cycle_cycleCounts,
+  }
+  // #endregion
+
+
+
+  // #region 尾轮
+  const end_attrParamsList = [// 只考虑奥黛塔 eqe 收尾
+    {Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
+     Odette: {toCastE:true, toCastQ:false,},
+     Vodyanitsa: {toCastE:true, toCastQ:false,},
+     Faruzan: {toCastE:false, toCastCharge:false, toCastQ:true,}
+    }
+  ];
+  const end_onfieldActionParamsList = [{},];
+  const end_offfieldActionParamsList = [{}];
+  const end_onfieldActionDetailsList = [{},];
+  const end_offfieldActionDetailsList = [{}];
+  const end_descList = ["尾轮"];
+  const end_totalTimes = [undefined]; // 表示等于计算结果，不额外赋值
+  const end_buttonNames = ["尾轮"];
+  // 赋值
+  configs.end = {
+    attrParamsList: end_attrParamsList, 
+    onfieldActionParamsList: end_onfieldActionParamsList,
+    offfieldActionParamsList: end_offfieldActionParamsList,
+    onfieldActionDetailsList: end_onfieldActionDetailsList,
+    offfieldActionDetailsList: end_offfieldActionDetailsList,
+    descList: end_descList,
+    totalTimes: end_totalTimes,
+    buttonNames : end_buttonNames,
+    cycleCounts: [1],
+  }
+
+
+  // #endregion
+
+  return configs;
 }
 
 
+
+
 const characters = {"Vesna":Vesna, "Odette":Odette, "Vodyanitsa":Vodyanitsa, "Faruzan":Faruzan,}; // 队伍中的具体角色角色，一般有四个元素
+const mainCarryID = "Vesna";
 
 
-function get_action_array(teamInitialAttributes, characters, presetTotalTime=undefined, ){// 给定参与角色及其配置，返回对应的手法列表和总耗时
-  // 先按照 order 排序
-  let orderTocharID = Object.fromEntries(Object.keys(characters).map(charID => [teamInitialAttributes[charID].order, charID]));
-  let orders = Object.keys(characters).map(charID => teamInitialAttributes[charID].order).sort((a,b)=>a-b);
-  const sortedCharIDs = orders.map(o => orderTocharID[o]);
-  const n_chars = sortedCharIDs.length;
+function get_sorted_character_IDs(characterIDs, orders){
+  let n = orders.length;
+  let orderTocharID = Object.fromEntries(Array.from({length:n}, (_, i) => {return [orders[i], characterIDs[i]]}));
+  let sortedOrders = orders.filter(v=>(typeof v === "number")).sort((a,b)=>a-b);
+  const sortedCharIDs = sortedOrders.map(o => orderTocharID[o]);
+  return sortedCharIDs;
+}
+
+function get_swapTimeStamps(onfieldDurations){
+  let swapTimeStamps = [0];
+  for(let duration of onfieldDurations){
+    swapTimeStamps.push(swapTimeStamps.at(-1) + duration);
+  }
+  return swapTimeStamps;
+}
+
+function get_action_array(teamInitialAttributes, characters, presetTotalTime=undefined, fixedTotalTime=undefined, mainCarryID = undefined,
+  isCyclic = true, params={isFirstCycle:false, isLastCycle:false}, 
+  onfieldActionParams={}, onfieldActionDetails={}, offfieldActionParams={}, offfieldActionDetails={}){
+  // 给定参与角色及其配置，返回对应的手法列表和总耗时
+  // 先按照 order 排序，如果没有 order，说明此轮手法中这个角色不参加
+  const characterIDs = Object.keys(characters), orders = characterIDs.map(k => teamInitialAttributes[k].order);
+  const sortedCharIDs = get_sorted_character_IDs(characterIDs, orders);
+  let n_chars = sortedCharIDs.length;
+  let mainCarryIndex = sortedCharIDs.findIndex(x => (x === mainCarryID)); // 主C在顺序列表中的索引
+  if(mainCarryIndex < 0){mainCarryIndex = n_chars-1};
   const onfieldActionsList = [];
-  const swapTimeStamps = [0];
+  let swapTimeStamps = [0];
   const onfieldDurations = [];
   const maxCDs = [];
   for(let charID of sortedCharIDs){// 前台
-    const actionsObject = characters[charID].get_onfield_actionsObject(teamInitialAttributes[charID]);
+    const tempparams = {...onfieldActionParams[charID], ...params}, details = onfieldActionDetails[charID];
+    const actionsObject = characters[charID].get_onfield_actionsObject(teamInitialAttributes[charID], tempparams, details);
     onfieldActionsList.push(actionsObject.actions);
     swapTimeStamps.push(swapTimeStamps.at(-1) + actionsObject.duration);
     onfieldDurations.push(actionsObject.duration);
     maxCDs.push(characters[charID].get_max_CD(teamInitialAttributes[charID]));
   }
-  const origOnfieldDurations = [...onfieldDurations];
-  const totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));
-  onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1);
-  swapTimeStamps[n_chars] = totalTime; // 如果冷却时间长，就把多出来的站场时间给最后一个人（大C）
   // 更新 onfieldActionsList 中的 timestamp
   for(let i=0; i<n_chars; i++){
     let actions = onfieldActionsList[i], startTS = swapTimeStamps[i];
     for(let action of actions){
       if(typeof action.timestamp === "number"){action.timestamp += startTS;}
     }
+  }
+  // 如果 fixedTotalTime 给定，则将 totalTime 设为这个值，然后从 onfieldActionsList 中删去时间戳比这个值大的action
+  let totalTime, origOnfieldDurations;
+  if(fixedTotalTime >= swapTimeStamps.at(-1)){ // 固定时长不短于手法自然时长：无需裁剪，多余时间加在最后一段（空转）
+    totalTime = fixedTotalTime;
+    origOnfieldDurations = [...onfieldDurations];
+    onfieldDurations[n_chars-1] += fixedTotalTime - swapTimeStamps.at(-1);
+    swapTimeStamps = get_swapTimeStamps(onfieldDurations);
+  }
+  else if(fixedTotalTime > 0){
+    let segIndex = swapTimeStamps.findIndex(x => (x >= fixedTotalTime)) - 1;
+    onfieldActionsList.splice(segIndex+1); // 将比 segIndex 大的段全部去除
+    maxCDs.splice(segIndex+1);
+    sortedCharIDs.splice(segIndex+1);
+    onfieldDurations.splice(segIndex+1);
+    // 将 segIndex 段中时间戳大于 fixedTotalTime 的都删除
+    let actions = onfieldActionsList[segIndex];
+    let actionIndex = find_action_index_by_smaller_timestamp(fixedTotalTime, actions);
+    actions.splice(actionIndex+1);
+    // 重新计算参数
+    onfieldDurations[segIndex] = fixedTotalTime - sum(onfieldDurations.slice(0, segIndex));
+    swapTimeStamps = get_swapTimeStamps(onfieldDurations);
+    n_chars = onfieldActionsList.length;
+    totalTime = fixedTotalTime;
+    origOnfieldDurations = [...onfieldDurations];
+  }
+  else{
+    totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));
+    origOnfieldDurations = [...onfieldDurations];
+    onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1); // 如果冷却时间长，就把多出来的站场时间给最后一段
+    swapTimeStamps = get_swapTimeStamps(onfieldDurations);
   }
   /* 获得需要的效果持续对象： {效果ID: [起始时间戳，终止时间戳]} {效果ID：[[第一个角色登场时失效范围], ...]},
      {效果ID：[效果生效的角色ID]}
@@ -190,10 +437,19 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   for(let idx in sortedCharIDs){
     let i = Number(idx), charID = sortedCharIDs[i];
     if(characters[charID].weapon.name === "讨龙英杰谭"){// 讨龙
+      // 看看是不是第一轮，是的话要开局卡讨龙，讨龙角色 -> 主C -> 开局角色，再次切回主C时剩余时间为 10-1-swapTimeStamps[i+1]
+      let buffDuration = 10;
+      if(params.isFirstCycle){
+        buffDuration = Math.max(0, buffDuration - (1 + swapTimeStamps[i+1]));
+      }
       for(let effect of characters[charID].weapon.effects){
-        effectSchedules[effect.ID] = [swapTimeStamps[i+1], swapTimeStamps[i+1]+10];
-        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1], 10, onfieldDurations);
-        effectTargets[effect.ID] = [sortedCharIDs[(i+1)%n_chars]];
+        effectSchedules[effect.ID] = [swapTimeStamps[i+1], swapTimeStamps[i+1]+buffDuration];
+        effectIneffectiveRanges[effect.ID] = get_effect_segment_ineffective_ranges(swapTimeStamps[i+1], buffDuration, onfieldDurations);
+        let nextCharID = sortedCharIDs[(i+1)%n_chars];
+        if(teamInitialAttributes[nextCharID].ThrillingTalesofDragonSlayersTarget === true){
+          effectTargets[effect.ID] = [nextCharID];
+        }
+        else{effectTargets[effect.ID] = []};
       }
     };
     if(get_artifactSet_ID(characters[charID].artifactSet) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
@@ -224,6 +480,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   const offfieldActionsList = sortedCharIDs.map(k=>[]);
   for(let idx in sortedCharIDs){
     let i = Number(idx), charID = sortedCharIDs[i], char = characters[charID];
+    const charOfffieldParams = {...params, ...(offfieldActionParams[charID] || {})}, details = offfieldActionDetails[charID];
     const tempEffectSchedules = {};
     for(let effectID of Object.keys(effectTargets)){ // 角色只处理受影响的效果
       if(effectTargets[effectID].includes(charID)){
@@ -231,7 +488,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
       }
     }
     const charOfffieldObject = char.get_offfield_actionsObject(teamInitialAttributes[charID], i, onfieldDurations, 
-                                                               tempEffectSchedules, false);
+                                                               tempEffectSchedules, false, isCyclic, charOfffieldParams, details);
     const actionsList = charOfffieldObject.actionsList || sortedCharIDs.map(k=>[]);
     for(let j =0; j<n_chars; j++){
       offfieldActionsList[j].push(...actionsList[j]);
@@ -286,24 +543,45 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
 
 
 
-
-
-
-
 // 不需要开发者修改的部分
+const initialAdditionalAttributeParams = {
+    Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true, isStellarSwirl:true,
+       isStellarConduct:false, order:10000}, // order为角色登场顺序
+    Odette : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:1},
+    Vodyanitsa : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:999},
+    Faruzan : {toCastE:true, toCastQ:true, isStellarSwirl:true, isStellarConduct:false, order:100},
+};
+
 const additionalAttributeParams = {
-    Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true, order:10000}, // order为角色登场顺序
-    Odette : {toCastE:true, toCastQ:false, order:1},
-    Vodyanitsa : {toCastE:true, toCastQ:false, order:999},
-    Faruzan : {toCastE:true, toCastQ:true, order:100},
+    Vesna : {}, // order为角色登场顺序
+    Odette : {},
+    Vodyanitsa : {},
+    Faruzan : {},
 }; // 额外面板参数，会附加给对应角色的初始面板
-const availableCharIDSet = new Set(Object.keys(additionalAttributeParams));
-function update_additionalAttributeParams(settings){
-  for(let charID of Object.keys(settings)){
-    if(availableCharIDSet.has(charID)){Object.assign(additionalAttributeParams[charID], settings[charID])};
+function initialize_additionalAttributeParams(){
+  for(let charID of Object.keys(initialAdditionalAttributeParams)){
+    additionalAttributeParams[charID] = {...initialAdditionalAttributeParams[charID]};
+  }
+}
+initialize_additionalAttributeParams();
+
+
+const availableCharIDSet = new Set(Object.keys(initialAdditionalAttributeParams));
+function update_additionalAttributeParams(newAttrParams){
+  for(let charID of Object.keys(newAttrParams)){
+    if(availableCharIDSet.has(charID)){Object.assign(additionalAttributeParams[charID], newAttrParams[charID])};
   }
 }
 
+function merge_multipler_sets(setList){
+  const merged = new Set();
+  for (const set of setList) {
+    for (const item of set) {
+      merged.add(item);
+    }
+  }
+  return merged;
+}
 
 
 let characterEffects = {}; // 每个角色的效果
@@ -484,7 +762,7 @@ function derive_effect_origID(IDText){// 获得武器或圣遗物套装效果的
 };
 
 function derive_total_buff_from_effects(characterID, effects, teamInitialAttributes, teamNetAttributes, action, 
-                                        isOnfield = characterID === onfieldCharacterID){
+  isOnfield = action.talentMeta?.isOnfield ?? (characterID === onfieldCharacterID)){
   // 获得 characterID 对应角色当前 effects 扣除 ineffectiveEffectIDSet 之后对应的增益
   // 其中角色净面板为 teamNetAttributes(字典)，行为为 action(字典)
   // 返回值为列表，第一个元素为合并的buff，第二个元素为buff描述组成的列表，第三个元素为词条增益详情 statBuffDetails
@@ -584,6 +862,12 @@ function convert_buff_from_weapon(weapon){
   buff[weapon.stat] = weapon.statValue;
   return buff;
 };
+
+function get_character_all_nonpermanent_effect_ID_set(charID){
+  update_character_effects();
+  const nonpermanentEffectIDs = [...characterEffects[charID].dynamic.map(effect => effect.ID), ...characterEffects[charID].net.map(effect => effect.ID)];
+  return new Set(nonpermanentEffectIDs);
+}
 
 
 function initialize_all_attributes(){ // 初始化 toUpdateAttributes 中为true的角色的所有面板
@@ -1152,7 +1436,8 @@ function simulate(actionArray, totalTime){// 序贯处理 actionArray
       if(action.talentMeta.isOnfield && action.talentMeta.characterID != null ){
         onfieldCharacterID = action.talentMeta.characterID;
       }
-      const curr_result = {hitnum, characterID, onfieldCharacterID, timestamp:action.timestamp};
+      let isOnfield = action.talentMeta?.isOnfield ?? (characterID === onfieldCharacterID);
+      const curr_result = {hitnum, characterID, onfieldCharacterID, isOnfield, timestamp:action.timestamp};
       update_net_attributes(action);
       update_dynamic_attributes(action);
       // 判断当前伤害是不是快照
@@ -1364,6 +1649,28 @@ function show_stat_buff_detail_popup(statName, lines){ // 弹出词条详情弹�
     p.textContent = "汇总：" + strings.join(", ");
     modal.appendChild(p);
   }
+  overlay.appendChild(modal);
+  overlay.onclick = function(){overlay.remove()}; // 点击弹窗外部关闭
+  modal.onclick = function(e){e.stopPropagation()};
+  document.body.appendChild(overlay);
+}
+
+function show_damage_detail_popup(result){ // 弹出伤害详情弹窗，内容复用 display_damage_details
+  const old = document.querySelector(".dmg-detail-modal-overlay");
+  if(old){old.remove()}; // 保证同时只有一个伤害详情弹窗
+  const overlay = document.createElement("div");
+  overlay.className = "dmg-detail-modal-overlay";
+  const modal = document.createElement("div");
+  modal.className = "dmg-detail-modal";
+  display_damage_details(modal, result); // 在弹窗内构建伤害表达式与面板细节
+  const title = document.createElement("span"); title.className = "subtitle";
+  title.textContent = "具体项细节";
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "modal-close";
+  closeBtn.textContent = "✕";
+  closeBtn.onclick = function(){overlay.remove()};
+  title.appendChild(closeBtn);
+  modal.insertBefore(title, modal.firstChild); // 标题置顶
   overlay.appendChild(modal);
   overlay.onclick = function(){overlay.remove()}; // 点击弹窗外部关闭
   modal.onclick = function(e){e.stopPropagation()};
@@ -1866,8 +2173,8 @@ function create_display_part(displayId){ // 设置展示区
 }
 
 // 展示伤害细节
-const damageComputationDivId = "damageComputationDiv", damageDetailDivId = "damageDetailDiv";
-function create_damage_table(wrapComputation, wrapDetail, solve, desc = "计算表格"){// 基于计算结果 solve 在 wrapComputation 中画表格，wrapDetail中展示细节
+const damageComputationDivId = "damageComputationDiv";
+function create_damage_table(wrapComputation, solve, desc = "计算表格"){// 基于计算结果 solve 在 wrapComputation 中画表格，wrapDetail中展示细节
   // 整理数据
   const results = solve.results;
   const dataNum = results.length;
@@ -1893,7 +2200,7 @@ function create_damage_table(wrapComputation, wrapDetail, solve, desc = "计算�
   tr.addEventListener("click", function(e){
     const th = e.target.closest("th");
     if (!th || th.dataset.col == null) return;   // 序号列没有 data-col，忽略
-    display_damage_details(wrapDetail, results[Number(th.dataset.col)]);
+    show_damage_detail_popup(results[Number(th.dataset.col)]);
   });
   tableHead.append(tr);
   // #endregion
@@ -1901,7 +2208,7 @@ function create_damage_table(wrapComputation, wrapDetail, solve, desc = "计算�
     // #region 表体部分
   const tableBody = document.createElement("tbody"); // result 包含{dmg, element, talentMetaName, rxndmg, dmgType, details, repetitionCount, EACount, characterID, onfieldCharacterID}
   const data = {"角色名称": results.map(item => (item.characterID != null) ? characters[item.characterID].name : "——"),
-    "角色位置": results.map(item => (item.characterID == null) ? "——" : ((item.characterID === item.onfieldCharacterID)? "前台":"后台")),
+    "角色位置": results.map(item => (item.characterID == null) ? "——" : ((item.isOnfield)? "前台":"后台")),
     "技能名称": results.map(item => (item.talentMetaName != null) ? item.talentMetaName : "——"),
     "攻击属性": results.map(item => ELEMENTS[item.element]), 
     "伤害反应类型": results.map(item => REACTION_DAMAGES[item.rxndmg]),
@@ -2231,39 +2538,68 @@ function create_damage_display_part(damageId){// 设置伤害展示区
   const partSubDiv1_h1 = document.createElement("h1");
   partSubDiv1_h1.textContent = `计算表格`;
   partSubDiv1.appendChild(partSubDiv1_h1);
-  // 细节区
-  const partSubDiv2 = document.createElement("div");
-  partSubDiv2.className = "card";
-  partSubDiv2.id = damageDetailDivId;
-  part.appendChild(partSubDiv2);
-  const partSubDiv2_h1 = document.createElement("h1");
-  partSubDiv2_h1.textContent = `具体项细节`;
-  partSubDiv2.appendChild(partSubDiv2_h1);
 
   beginBtn.onclick = function(){
-    let settingObject = get_settings();
-    let settingsList = settingObject.settingsList, descList = settingObject.descList;
-    const presetTotalTimes = settingObject.totalTimes;
-    const buttonNames = settingObject.buttonNames;
-    let n = settingsList.length;
-    let totalDMGs = [], totalTimes = [];
     update_team_cost();
     subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
     partSubDiv1.replaceChildren();
-    // 先画按钮
-    const buttonDiv = document.createElement("span"); 
-    partSubDiv1.appendChild(buttonDiv);
+    // 第一步：获得 configs，拆解并画按钮
+    const configs = get_configs(characters);
     const tableElementsList = [], btnList = [];
+    const attrParamsList = [], onfieldActionParamsList=[], onfieldActionDetailsList=[], offfieldActionParamsList=[];
+    const offfieldActionDetailsList=[], descList = [], cycleCounts = [], presetTotalTimes=[], labels = []; 
+    const buttonSpan = document.createElement("h1"); 
+    partSubDiv1.appendChild(buttonSpan);
+    for(let key of Object.keys(configs)){
+      const n = configs[key].attrParamsList.length;
+      const buttonNames = configs[key].buttonNames;
+      attrParamsList.push(...configs[key].attrParamsList);
+      onfieldActionParamsList.push(...configs[key].onfieldActionParamsList);
+      onfieldActionDetailsList.push(...configs[key].onfieldActionDetailsList);
+      offfieldActionParamsList.push(...configs[key].offfieldActionParamsList);
+      offfieldActionDetailsList.push(...configs[key].offfieldActionDetailsList);
+      descList.push(...configs[key].descList);
+      cycleCounts.push(...configs[key].cycleCounts);
+      presetTotalTimes.push(...configs[key].totalTimes);
+      const btns = Array.from({length:n}, (_,i)=>{return document.createElement("button")});
+      btnList.push(...btns);
+      if(key === "start"){
+        buttonSpan.append("首轮：(\u00A0");
+        labels.push(...buttonNames.map(v => "start"));
+      }
+      else if(key === "cycle"){
+        buttonSpan.append("循环轮：(\u00A0");
+        labels.push(...buttonNames.map(v => "cycle"));
+      }
+      else if(key === "end"){
+        buttonSpan.append("尾轮：(\u00A0");
+        labels.push(...buttonNames.map(v => "end"));
+      }
+      for(let idx in btns){
+        let i = Number(idx), btn = btns[i];
+        btn.className = "btn"; btn.textContent = buttonNames[i];
+        buttonSpan.append(btn, `×${configs[key].cycleCounts[i].toFixed(0)}`);
+        if(i !== n-1){buttonSpan.append(",\u00A0")}
+        else{buttonSpan.append("\u00A0);\u00A0\u00A0")}
+      }
+    }
+
+    // 第二步：计算伤害，并绘制表格（隐藏），存储表格对象
+    let n = attrParamsList.length;
+    let totalDMGs = [], totalTimes = [], cumulatedTime = 0, cumulatedDMG = 0;
     for(let i=0; i<n; i++){
-      const btn = document.createElement("button"); btn.className = "btn"; btn.textContent = buttonNames[i];
-      buttonDiv.appendChild(btn);
-      btnList.push(btn);
-      update_additionalAttributeParams(settingsList[i]);
+      update_additionalAttributeParams(attrParamsList[i]);
       initialize_toUpdateAttributes();
       initialize_all_attributes();
-      const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters, presetTotalTimes[i]);
+      let fixedTotalTime = (labels[i] === "end") ? 120-cumulatedTime : undefined;
+      let isCyclic = (labels[i] === "cycle") ? true : false;
+      let params = {};
+      params.isFirstCycle = (labels[i] === "start") ? true : false;
+      params.isLastCycle = (labels[i] === "end") ? true : false;
+      const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters, presetTotalTimes[i], fixedTotalTime, mainCarryID, 
+            isCyclic, params, onfieldActionParamsList[i], onfieldActionDetailsList[i], offfieldActionParamsList[i], offfieldActionDetailsList[i]);
       const solve = simulate(actionArray, totalTime);
-      const tableElements = create_damage_table(partSubDiv1, partSubDiv2, solve, descList[i]);
+      const tableElements = create_damage_table(partSubDiv1, solve, descList[i]);
       if(i !== 0){// 默认显示第一个，后续的全部隐藏
         for(let element of tableElements){
           element.classList.add("hidden");
@@ -2272,6 +2608,8 @@ function create_damage_display_part(damageId){// 设置伤害展示区
       tableElementsList.push(tableElements);
       totalDMGs.push(solve.totalDMG);
       totalTimes.push(solve.totalTime);
+      cumulatedTime += solve.totalTime * cycleCounts[i];
+      cumulatedDMG += solve.totalDMG * cycleCounts[i];
     }
     // 设置按钮的效果：切换表格的隐藏
     for(let i = 0; i < n; i++){
@@ -2286,24 +2624,42 @@ function create_damage_display_part(damageId){// 设置伤害展示区
       // 建立分割线
       const separator = document.createElement("hr"); separator.className = "separator-line";
       partSubDiv1.append(separator);
+      // 循环论总伤和DPS
+      let cycleDMG = sum(totalDMGs.filter((_, idx)=>(labels[idx] === "cycle")));
+      let cycleTime = sum(totalTimes.filter((_, idx)=>(labels[idx] === "cycle")));
+      let cycleDPS = cycleDMG / cycleTime;
+      const displayWrap1 = document.createElement("div"); displayWrap1.className = "result-display";
+      const text1_1 = document.createElement("span"); text1_1.textContent = "一轮循环总伤害";
+      const box1_1 = document.createElement("div"); box1_1.className = "result-display-box";
+      box1_1.textContent = `${cycleDMG.toFixed(0)}`;
+      const text1_2 = document.createElement("span"); text1_2.textContent = '\u00A0\u00A0\u00A0' + "一轮循环总耗时";
+      const box1_2 = document.createElement("div"); box1_2.className = "result-display-box";
+      box1_2.textContent = `${cycleTime.toFixed(2)}`;
+      const text1_3 = document.createElement("span"); text1_3.textContent = '\u00A0\u00A0\u00A0' + "一轮循环DPS";
+      const box1_3 = document.createElement("div"); box1_3.className = "result-display-box";
+      box1_3.textContent = `${cycleDPS.toFixed(0)}`;
+      displayWrap1.append(text1_1, box1_1, text1_2, box1_2, text1_3, box1_3);
+      partSubDiv1.append(displayWrap1);
 
-      let totalTime = sum(totalTimes), totalDMG = sum(totalDMGs);
-      let DPS = totalDMG / totalTime;
-      const displayWrap = document.createElement("div");
-      displayWrap.className = "result-display";
-      const text1 = document.createElement("span"); text1.textContent = "流程总伤害";
-      const box1 = document.createElement("div"); box1.className = "result-display-box";
-      box1.textContent = `${totalDMG.toFixed(0)}`;
-      const text2 = document.createElement("span"); text2.textContent = '\u00A0\u00A0\u00A0' + "流程总耗时";
-      const box2 = document.createElement("div"); box2.className = "result-display-box";
-      box2.textContent = `${totalTime.toFixed(2)}`;
-      const text3 = document.createElement("span"); text3.textContent = '\u00A0\u00A0\u00A0' + "流程DPS";
-      const box3 = document.createElement("div"); box3.className = "result-display-box";
-      box3.textContent = `${DPS.toFixed(0)}`;
-      displayWrap.append(text1, box1, text2, box2, text3, box3);
-      partSubDiv1.append(displayWrap);
+      const separator2 = document.createElement("hr"); separator2.className = "separator-line";
+      partSubDiv1.append(separator2);
+
+      // 120秒总伤和DPS
+      let cumulatedDPS = cumulatedDMG / cumulatedTime;
+      const displayWrap2 = document.createElement("div");
+      displayWrap2.className = "result-display";
+      const text2_1 = document.createElement("span"); text2_1.textContent = "120秒流程总伤害";
+      const box2_1 = document.createElement("div"); box2_1.className = "result-display-box";
+      box2_1.textContent = `${cumulatedDMG.toFixed(0)}`;
+      const text2_2 = document.createElement("span"); text2_2.textContent = '\u00A0\u00A0\u00A0' + "流程总耗时";
+      const box2_2 = document.createElement("div"); box2_2.className = "result-display-box";
+      box2_2.textContent = `${cumulatedTime.toFixed(2)}`;
+      const text2_3 = document.createElement("span"); text2_3.textContent = '\u00A0\u00A0\u00A0' + "流程DPS";
+      const box2_3 = document.createElement("div"); box2_3.className = "result-display-box";
+      box2_3.textContent = `${cumulatedDPS.toFixed(0)}`;
+      displayWrap2.append(text2_1, box2_1, text2_2, box2_2, text2_3, box2_3);
+      partSubDiv1.append(displayWrap2);
     }
-    
   }
   
 

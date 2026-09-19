@@ -39,7 +39,9 @@
 
 */
 
-import {STATS, ELEMENTS} from "./基础定义.js";
+import {STATS, ELEMENTS, CATALYZE_SET, TRANSFORMATIVE_SET, AMPLIFYING_SET, LUNAR_SET, STELLAR_SET,
+  get_reaction_damage_element
+} from "./基础定义.js";
 
 
 const actionSetIDSet = new Set(["ineffectiveEffectIDSet", "ineffectiveEquivEffectIDSet", "ineffectiveEffectOwnerIDSet"]);
@@ -57,7 +59,7 @@ export function assign_details_to_action(action, details){// 将对象 details �
       else{Object.assign(action[k], v);}
     }
     else if(k === "replacements"){
-      if(action.replacements == undefined){action.replacements = v}
+      if(action.replacements == undefined){action.replacements = structuredClone(v)}
       else{
         // 先取出要穿透的属性（排除 replacements 自身）
         const { replacements, ...restDetails } = details;
@@ -76,7 +78,7 @@ export function assign_details_to_action(action, details){// 将对象 details �
   }
 }
 
-function find_action_index_by_larger_timestamp(timestamp, actions){ // 恰好比 timestamp 大的第一个
+export function find_action_index_by_larger_timestamp(timestamp, actions){ // 恰好比 timestamp 大的第一个
   let thre = timestamp + EPSILON;
   let leftindex = null, rightindex = null;
   let lefttimestamp = 0, righttimestamp = Infinity;
@@ -94,7 +96,7 @@ function find_action_index_by_larger_timestamp(timestamp, actions){ // 恰好比
   else{startindex = Math.ceil((thre - lefttimestamp)/(righttimestamp - lefttimestamp) * (rightindex - leftindex)) + leftindex;}
   return startindex;
 }
-function find_action_index_by_smaller_timestamp(timestamp, actions){ // 恰好比 timestamp 小的第一个
+export function find_action_index_by_smaller_timestamp(timestamp, actions){ // 恰好比 timestamp 小的第一个
   let thre = timestamp - EPSILON;
   let leftindex = null, rightindex = null;
   let lefttimestamp = 0, righttimestamp = Infinity;
@@ -249,8 +251,8 @@ function merge_actions_by_ineffectiveEffectIDSet(actions, selections = undefined
   actions.push(...mergedActions);
 }
 
-function get_segment_offfield_actions(talentMeta, firstTimestamp, metaInterval, maxCount, index, onfieldDurations, 
-  effectSchedules = {}, toMerge = false){
+function get_segment_offfield_actions(talentMeta, firstTimestamp, metaInterval, maxCount, index, onfieldDurations, gaptime = 0,
+  effectSchedules = {}, toMerge = false, isCyclic = true){ // isCyclic=false 时(首轮/尾轮)丢弃超出总时长的后台行为而不是回绕
   /* 给定当前角色后台伤害的talentMeta、第一次造成后台伤害的时间戳(0时间戳为当前角色登场时间)、循环时间间隔、最大次数、在队伍中的索引、
      队伍中角色站场时间列表、生效效果对象(key是效果ID，value是一个列表，[起始时间，终止时间, 生效次数]，0时间戳为首个角色登场时间, 生效次数不存在就是没有限制) 
      返回一个列表，列表中的元素为与队伍角色一一对应列表，表示那个角色站场时后台进行的行为，考虑效果无效的情况（引入ineffectiveEquivEffectIDSet）。
@@ -264,12 +266,16 @@ function get_segment_offfield_actions(talentMeta, firstTimestamp, metaInterval, 
     swapTimestamps.push(swapTimestamps.at(-1) + onfieldDurations[i]);
   }
   const totalTime = swapTimestamps.at(-1);
-  const count = Math.min(maxCount, Math.floor(totalTime/metaInterval)+1);
+  let count = Math.max(0, Math.min(maxCount, Math.floor((totalTime - gaptime)/metaInterval)+1));
   // 获得后台的 actions 初始列表
   let actions = Array.from({length:count}, (_, i)=>{
     return {talentMeta:talentMeta, timestamp:swapTimestamps[index]+firstTimestamp+i*metaInterval};
   });
   actions.sort((a,b)=>a.timestamp - b.timestamp);
+  if(!isCyclic){// 非循环轮：丢弃超时的后台行为，避免回绕到下一轮
+    actions = actions.filter(a => a.timestamp <= totalTime + EPSILON);
+    count = actions.length;
+  } 
   // 开始配置效果
   const effectIDs = Object.keys(effectSchedules);
   const labelsList = Array.from({length:count}, ()=>[]); // 不生效的效果索引组成的列表，和 action 一一对应
@@ -289,8 +295,9 @@ function get_segment_offfield_actions(talentMeta, firstTimestamp, metaInterval, 
   for(let i = 0; i<count; i++){
     const set = new Set(labelsList[i]);
     actions[i].ineffectiveEffectIDSet = set;
-    actions[i].timestamp = actions[i].timestamp % totalTime; // 将超过范围的时间戳压回来
+    if(isCyclic){actions[i].timestamp = actions[i].timestamp % totalTime;} // 循环轮才将超范围的时间戳压回来
   }
+  actions.sort((a,b) => {let err = a.timestamp - b.timestamp; return typeof err === "number" ? err : 0});
   // 开始给每个 segment 放入 actions
   const actionsList = Array.from({length:n_seg}, ()=>[]);
   let segIndex = 0, i=0;
@@ -397,10 +404,67 @@ function check_effect(effect, teamInitialAttributes, action){// 检测effect是�
   return mark;
 }
 
+/* 对 actions 进行元素反应判定和对应行为生成的函数 */
+function realize_elemental_reaction_in_actions(actions, rxndmg, auraElement, newMetaID, newMetaName, elementalApplicationManager){
+  // 给定 actions 和要处理的反应伤害类型 rxndmg，算法基于 elementalApplicationManager 实现 actions 的序贯判别（要求存在 timestamp）
+  const recorder = elementalApplicationManager.map(item => ({prevTS:null, prevCount:null})); // 序贯处理过程中的计时器和计数器
+  const N = elementalApplicationManager.length;
+  const check = (action) => {//判断元素附着触发次数，返回值为整数，0表示没有附着
+    let appliaction = 0;
+    let hitnum = (action.talentMeta.hitnum || 1) * (action.repetitionCount || 1); 
+    for(let i=0; i<N; i++){
+      const metaIDSet = elementalApplicationManager[i].metaIDSet, minCount=elementalApplicationManager[i].minCount, 
+            minInterval = elementalApplicationManager[i].minInterval;
+      if(metaIDSet.has(action.talentMeta.ID)){
+        if(recorder[i].prevTS == null || (action.timestamp - recorder[i].prevTS) >= minInterval){
+          recorder[i].prevTS = action.timestamp; 
+          appliaction = Math.ceil(hitnum / minCount); 
+          recorder[i].prevCount = mod(hitnum-1, minCount); 
+        }
+        else{
+          if(recorder[i].prevCount == null){recorder[i].prevCount = minCount-1};
+          recorder[i].prevCount += hitnum;
+          appliaction = Math.floor(recorder[i].prevCount / minCount);
+          recorder[i].prevCount = mod(recorder[i].prevCount, minCount);
+        }
+        break;
+      }
+    }
+    return appliaction;
+  }
+  if(TRANSFORMATIVE_SET.has(rxndmg) || LUNAR_SET.has(rxndmg) || STELLAR_SET.has(rxndmg)){// 剧变类反应，额外生成伤害单元
+    let i = 0;
+    while(i < actions.length){
+      let action = actions[i];
+      let appliaction = check(action);
+      let element = get_reaction_damage_element(rxndmg, action.talentMeta.element, auraElement);
+      let newMeta = {ID:newMetaID, characterID:action.talentMeta.characterID, rxndmg:rxndmg, name:newMetaName, 
+                     element:element, isOnfield:action.talentMeta.isOnfield};
+      if(appliaction > 0){
+        let newAction = structuredClone(action);
+        newAction.talentMeta = newMeta;
+        newAction.repetitionCount = appliaction;
+        actions.splice(i+1, 0, newAction);
+        i += 1;
+      }
+      i++;
+    }
+  }
+  else if(AMPLIFYING_SET.has(rxndmg) || CATALYZE_SET.has(rxndmg)){// 增幅和激化反应，在原来的单元上修改
+    for(let i=0; i<actions.length; i++){
+      let action = actions[i];
+      let appliaction = check(action);
+      if(appliaction > 0){
+        action.talentMeta = structuredClone(action.talentMeta);
+        action.talentMeta.rxndmg = rxndmg;
+      }
+    }
+  }
+}
 
-
-
-
+function shallowcopy(actions){
+  return actions.map(item => {return {...item}});
+}
 
 
 /* 模板文件
@@ -643,6 +707,13 @@ export const Vesna = {
                     attackType:"skill", isOnfield:true, isSnapshot:false, 
                     hitnum:1, scaling:{1:{atk:2.0}}, constellation:6}, // 变移:星扩散
   },
+  elementalApplicationManager : [ // 元素施加控制器，对于 talentMetas 中具有元素附着的行为，考虑同类归一以及 2.5s/3hit
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["a1","a2","a3","a4","a5","a6"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e0","e1","e2_anemo"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["z"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e_windPinion"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["step_anemo"])},
+  ],
   effects : [ // {效果ID、效果条件、效果内容、是否为净效果、是否常驻、效果描述}
               // "是否常驻"为true时，表示这个效果在伤害计算流程开始前就一直生效（如命座3和5的技能等级提升），应该加在初始面板上，这类效果的两个输入都可以为空
               // 效果条件可填的内容有 受益角色、排除角色、受益元素、排除元素、是否前台、反应伤害类型、排除反应伤害类型、技能伤害类型、排除技能伤害类型、技能ID、check函数、其他字段
@@ -685,11 +756,10 @@ export const Vesna = {
   reset_variables(attributes){Object.keys(this.variables).forEach(key => {attributes[key]=this.variables[key]})},
   get_max_CD(attributes){return 18*(1-attributes.stats.CDReduction)}, // 角色技能循环的最大CD
   get_onfield_actionsObject(attributes, params={}, actionDetails={}){// 获得角色站场时的actions，为对象 {actions, reactions, duration}
-    const reactionStellarSwirlAnemoOnfieldTalentMeta = {characterID: "Vesna", element:"anemo", rxndmg:"reactionStellarSwirl", 
-                                                        ID:"reactionStellarSwirlAnemo", name:"反应星扩散:风", isOnfield:true};
     const reactionStellarSwirlCryoTalentMeta = {characterID: "Vesna", element:"cryo", rxndmg:"reactionStellarSwirl",
                                                 ID:"reactionStellarSwirlCryo", name:"反应星扩散:冰"};
     /*时间设置：e0:0.7, e1:0.4s, e2:0.7s, e3:1.33s, a1:0.5s, a2:0.5s, a3:0.75s, a4:0.5s, a5:0.6s, a6:0.6s, q:2.5s, z:1.5s
+      风翎：a1, a2, a4, a5 = 1, a3=2, a6=3, z/plunge = 2, 6个风翎叠1层剑气
     */
     const talentTimeDict = {a1:0.5, a2:0.5, a3:0.75, a4:0.5, a5:0.6, a6:0.6, q:2.5, z:1.5, step:1, e0:0.7, e1:0.4, e2:0.7, e3:1.33};
     let Qdrt = attributes.toCastQ ? 2.5 : 0;
@@ -703,6 +773,41 @@ export const Vesna = {
         else{action.timestamp=currTS;}//附加伤害，比如e3有两类伤害，认为同时生效
       }
     }
+    const actionsA1ToA6 = [
+      {talentMeta:Vesna.talentMetas.a1},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a2,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a3,},
+      {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:2},
+      {talentMeta:Vesna.talentMetas.a4,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a5,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a6,},
+      {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:3},
+    ];
+    const actionsA1ToA5 = [
+      {talentMeta:Vesna.talentMetas.a1},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a2,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a3,},
+      {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:2},
+      {talentMeta:Vesna.talentMetas.a4,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a5,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+    ];
+    const actionsA1ToA3 = [
+      {talentMeta:Vesna.talentMetas.a1},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a2,},
+      {talentMeta:Vesna.talentMetas.e_windPinion,},
+      {talentMeta:Vesna.talentMetas.a3,},
+      {talentMeta:Vesna.talentMetas.e_windPinion, repetitionCount:2},
+    ];
+    const isLastCycle = params.isLastCycle ?? false, isC2 = (attributes.constellation >= 2);
     let results = {};
     switch(attributes.constellation){
       case 0: {
@@ -713,29 +818,16 @@ export const Vesna = {
             {talentMeta:Vesna.talentMetas.e1,},
             {talentMeta:Vesna.talentMetas.e2_anemo,},
             {talentMeta:Vesna.talentMetas.e2_stellar,},
-            {talentMeta:Vesna.talentMetas.q,},
+            ...(isLastCycle ? [{talentMeta:Vesna.talentMetas.q,}] : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a3,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a4,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA6) : shallowcopy(actionsA1ToA3)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a3,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a4,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA3) : []),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
+            ...(isLastCycle ? [] : [{talentMeta:Vesna.talentMetas.q,}]),
           ]
         }
         else{
@@ -744,34 +836,13 @@ export const Vesna = {
             {talentMeta:Vesna.talentMetas.e1,},
             {talentMeta:Vesna.talentMetas.e2_anemo,},
             {talentMeta:Vesna.talentMetas.e2_stellar,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a3,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a4,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a5,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a6,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a3,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a4,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a5,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a6,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : []),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
           ]
@@ -822,69 +893,35 @@ export const Vesna = {
             {talentMeta:Vesna.talentMetas.e1,},
             {talentMeta:Vesna.talentMetas.e2_anemo,},
             {talentMeta:Vesna.talentMetas.e2_stellar,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.q,},
+            ...(isLastCycle||isC2 ? [{talentMeta:Vesna.talentMetas.q,}] : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...shallowcopy(actionsA1ToA6),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle||isC2 ? shallowcopy(actionsA1ToA3) : []),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
+            ...(isLastCycle||isC2 ? [] : [{talentMeta:Vesna.talentMetas.q,}]),
           ]
         }
         else{
           actions = [
             {talentMeta:Vesna.talentMetas.e0},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
             {talentMeta:Vesna.talentMetas.e1,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
             {talentMeta:Vesna.talentMetas.e2_anemo,},
             {talentMeta:Vesna.talentMetas.e2_stellar,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : shallowcopy(actionsA1ToA6)),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
-            {talentMeta:Vesna.talentMetas.a1},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
-            {talentMeta:Vesna.talentMetas.a2,},
-            {talentMeta:Vesna.talentMetas.e_windPinion,},
+            ...(isLastCycle ? shallowcopy(actionsA1ToA5) : []),
             {talentMeta:Vesna.talentMetas.e3_stellar_1,},
             {talentMeta:Vesna.talentMetas.e3_stellar_2,},
           ]
@@ -895,17 +932,32 @@ export const Vesna = {
         break;
       }
     }
-    const reactions = [
-        {talentMeta:reactionStellarSwirlAnemoOnfieldTalentMeta, repetitionCount:10, timestamp:results.duration},
-        {talentMeta:reactionStellarSwirlCryoTalentMeta, repetitionCount:5, parameters:{stacks:3}, timestamp:results.duration},
-      ];
-    results.actions.push(...reactions);
+    // 反应通过推导得到
+    realize_elemental_reaction_in_actions(results.actions, "reactionStellarSwirl", "cryo", "reactionStellarSwirlAnemo", "反应星扩散:风", 
+                                          this.elementalApplicationManager);
     // 给actions中所有的元素赋值 details
     for(let action of results.actions){assign_details_to_action(action, actionDetails)};
     return results;
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}, actionDetails={}){// 获得角色后台时的actions，为数组
-    return {};
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, isCyclic=true, params={}, actionDetails={}){// 获得角色后台时的actions，为数组
+    // 反应星扩散冰 放在这里实现
+    const initialParams = {firstTS:1.8};
+    params = Object.assign(initialParams, params);
+    const reactionStellarSwirlCryoTalentMeta = {characterID: null, element:"cryo", rxndmg:"reactionStellarSwirl",
+                                                ID:"reactionStellarSwirlCryo", name:"反应星扩散:冰", isOnfield:true};
+    const maxCount = 6, metaInterval=3.1, meta=reactionStellarSwirlCryoTalentMeta;
+    const firstTS = params.firstTS ?? 3.8;
+    const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, 0, effectSchedules, false, isCyclic);
+    if(toMerge){
+      for(let actions of actionsList){merge_actions_by_ineffectiveEffectIDSet(actions);}
+    }
+    // 附加 actionDetails 的信息
+    const detailsSegIndices = Object.keys(actionDetails).map(k => Number(k)).filter(v=>(v<actionsList.length));
+    for(let i of detailsSegIndices){
+      let actions = actionsList[i], details = actionDetails[i];
+      for(let action of actions){assign_details_to_action(action, details)};
+    }
+    return {actionsList,};
   },
 };
 // 效果函数, 输入为(初始面板，净面板(计算全buff)/初始面板(计算净面板)/{}(计算永久buff), action(行为，可以为空对象), activated(bool值，是否无条件生效))
@@ -1091,6 +1143,11 @@ export const Odette = {
                             attackType:"skill", isOnfield:true, isSnapshot:false, 
                             hitnum:1, scaling:{1:{atk:0.66}}, constellation:4}, 
   },
+  elementalApplicationManager : [ // 元素施加控制器，对于 talentMetas 中具有元素附着的行为，考虑同类归一以及 2.5s/3hit
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e0", "e1_cryo",])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["q1", "q2"])},
+    {minCount:3, minInterval:2-EPSILON, metaIDSet:new Set(["e_off1_cryo", "e_off2_cryo"])},
+  ],
   effects : [ // {效果ID、效果条件、效果内容、是否为净效果、是否常驻、效果描述}
               // "是否常驻"为true时，表示这个效果在伤害计算流程开始前就一直生效（如命座3和5的技能等级提升），应该加在初始面板上，这类效果的两个输入都可以为空
               // 效果条件可填的内容有 受益角色、排除角色、受益元素、排除元素、是否前台、反应伤害类型、排除反应伤害类型、技能伤害类型、排除技能伤害类型、技能ID、check函数、其他字段
@@ -1167,38 +1224,43 @@ export const Odette = {
     if(isStellarSwirl === true && !isStellarConduct){actions.push({talentMeta:Odette.talentMetas.e2_swirl,})}
     else{actions.push({talentMeta:Odette.talentMetas.e2_conduct, parameters:{stacks:params.stacks || 0}})};
     applyTimestamps(actions);
-    const duration = actions.at(-1).timestamp + 10*EPSILON + params.addedDuration;
+    const duration = actions.at(-1).timestamp + 10*EPSILON + (params.addedDuration || 0);
     // 给actions中所有的元素赋值 details
     for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration};
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, 
-            params={isStellarSwirl:undefined, isStellarConduct:undefined, segIndices:[]}, actionDetails={}){
-    const isStellarSwirl = (params.isStellarSwirl ?? attributes.isStellarSwirl) ?? false;
-    const isStellarConduct = (params.isStellarConduct ?? attributes.isStellarConduct) ?? false;
-    const meta1Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
-    const meta2Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;         
-
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, isCyclic=true,
+            params={}, actionDetails={}){
     const meta1 = (attributes.isStellarSwirl && !attributes.isStellarConduct) ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
     const meta2 = (attributes.isStellarSwirl && !attributes.isStellarConduct) ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;
     const maxCount = 5, metaInterval = 4; // 每一种伤害都是间隔4秒一次，初始时间不一样
-    const firstTS1 = 2, firstTS2 = 4;
+    const firstTS1 = 3, firstTS2 = 5;
     // 获得每种伤害对应的列表
     const candidateMetas = [meta1, Odette.talentMetas.e_off1_cryo, meta2, Odette.talentMetas.e_off2_cryo];
     const firstTSList = [firstTS1, firstTS1, firstTS2, firstTS2];
     const actionsListArray = [];
     for(let idx in candidateMetas){
       let i = Number(idx), meta = candidateMetas[i], firstTS = firstTSList[i];
-      const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, effectSchedules);
+      const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, 4, effectSchedules, false, isCyclic);
       actionsListArray.push(actionsList);
     }
-    // 合并, 当 params.segIndices 非空时，将其中的 meta1 换成 meta1Rep, meta2 换成 meta2Rep
+    // 合并, 当 params.segIndices 非空时，将其中的 meta1 换成 meta1Rep, meta2 换成 meta2Rep; 将 actionDetails.segIndices 中的段行为附加 actionDetails
+    const detailsSegIndices = Object.keys(actionDetails).map(k => Number(k)).filter(v => !Number.isNaN(v));
+    const paramsSegIndices = Object.keys(params).map(k => Number(k)).filter(v => !Number.isNaN(v));
     const actionsList = [];
     for(let i=0;i<onfieldDurations.length;i++){
       let actions = actionsListArray.reduce((list, cur) => {list.push(...cur[i]); return list}, []);
+      if(detailsSegIndices.includes(i)){ // 附加额外的信息
+        let details = actionDetails[i] || {};
+        for(let action of actions){assign_details_to_action(action, details)};
+      }
       // 排序
       sort_actions_by_timestamps(actions);
-      if(params.segIndices.includes(i)){// 替换
+      if(paramsSegIndices.includes(i)){// 替换
+        const isStellarSwirl = (params[i].isStellarSwirl ?? attributes.isStellarSwirl) ?? false;
+        const isStellarConduct = (params[i].isStellarConduct ?? attributes.isStellarConduct) ?? false;
+        const meta1Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off1_swirl : Odette.talentMetas.e_off1_conduct;
+        const meta2Rep = (isStellarSwirl && !isStellarConduct) ? Odette.talentMetas.e_off2_swirl : Odette.talentMetas.e_off2_conduct;  
         for(let action of actions){
           if(action.talentMeta.ID === meta1.ID){action.talentMeta = meta1Rep;}
           else if(action.talentMeta.ID === meta2.ID){action.talentMeta = meta2Rep;}
@@ -1345,6 +1407,11 @@ export const Vodyanitsa = {
               attackType:"skill", isOnfield:false, isSnapshot:false, 
               hitnum:1, scaling:{10:{hp:0.0589}, 13:{hp:0.0695}}},
   },
+  elementalApplicationManager : [ // 元素施加控制器，对于 talentMetas 中具有元素附着的行为，考虑同类归一以及 2.5s/3hit
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e0",])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["q"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e_off"])},
+  ],
   effects : [ // {效果ID、效果条件、效果内容、是否为净效果、是否常驻、效果描述}
               // "是否常驻"为true时，表示这个效果在伤害计算流程开始前就一直生效（如命座3和5的技能等级提升），应该加在初始面板上，这类效果的两个输入都可以为空
               // 效果条件可填的内容有 受益角色、排除角色、受益元素、排除元素、是否前台、反应伤害类型、排除反应伤害类型、技能伤害类型、排除技能伤害类型、技能ID、check函数、其他字段
@@ -1416,9 +1483,16 @@ export const Vodyanitsa = {
     for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration : 1+Qdrt+10*EPSILON,}
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params={}, actionDetails={}){
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, isCyclic=true, 
+    params={}, actionDetails={}){
     const maxCount = 6, metaInterval=3, meta = Vodyanitsa.talentMetas.e_off, firstTS=3;
-    const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, effectSchedules, toMerge);
+    const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, 0, effectSchedules, toMerge, isCyclic);
+    // 附加 actionDetails 的信息
+    const detailsSegIndices = Object.keys(actionDetails).map(k => Number(k)).filter(v=>(v<actionsList.length));
+    for(let i of detailsSegIndices){
+      let actions = actionsList[i], details = actionDetails[i];
+      for(let action of actions){assign_details_to_action(action, details)};
+    }
     return {actionsList};
   },
 };
@@ -1610,6 +1684,11 @@ export const Faruzan = {
                   attackType:"skill", isOnfield:false, isSnapshot:false,
                   hitnum:1, scaling:{10:{atk:1.944}, 13:{atk:2.295}}, constellation:6}, // 后台伤害194.4%/229.5%
   },
+  elementalApplicationManager : [ // 元素施加控制器，对于 talentMetas 中具有元素附着的行为，考虑同类归一以及 2.5s/3hit
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["e0",])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["q0"])},
+    {minCount:3, minInterval:2.5, metaIDSet:new Set(["z_special", "q_c6_vortex"])},
+  ],
   effects : [
     {ID:"Faruzan_QAnemoDMG", condition:{}, effect:Q_anemo_dmg_effect_of_Faruzan, isNet:true, isPermanent:false,
     get desc(){return `珐露珊Q祈风之赐：为全队提供32.4%(10级Q)或38.3%(13级Q)风元素伤害加成`}},
@@ -1641,44 +1720,53 @@ export const Faruzan = {
   get_onfield_actionsObject(attributes, params={}, actionDetails={}){
     let chargedrt = attributes.toCastCharge ? 1 : 0;
     let Qdrt = attributes.toCastQ ? 1 : 0;
-    const actions = [{talentMeta:Faruzan.talentMetas.e0, timestamp:0.7},];
-    if(attributes.toCastCharge){actions.push({talentMeta:Faruzan.talentMetas.charge_special, timestamp:0.7+chargedrt})}
-    if(attributes.toCastQ){actions.push({talentMeta:Faruzan.talentMetas.q0, timestamp:0.7+chargedrt+Qdrt},)}
+    let Edrt = attributes.toCastE ? 0.7 : 0;
+    const actions = [
+      ...(attributes.toCastE ? [{talentMeta:Faruzan.talentMetas.e0, timestamp:Edrt}] : []),
+      ...(attributes.toCastCharge ? [{talentMeta:Faruzan.talentMetas.z_special, timestamp:Edrt+chargedrt}] : []),
+      ...(attributes.toCastQ ? [{talentMeta:Faruzan.talentMetas.q0, timestamp:0.7+chargedrt+Qdrt}] : []),
+    ];
     let duration = Math.max(1, actions.at(-1).timestamp) + 10*EPSILON;
     // 给actions中所有的元素赋值 details
     for(let action of actions){assign_details_to_action(action, actionDetails)};
     return {actions, duration};
   },
-  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, params = {element:"cryo"}){
+  get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, isCyclic=true,
+    params = {}, actionDetails={}){
+    if(!attributes.toCastQ){ // 不释放Q就没有后台
+      return onfieldDurations.map(item => []);
+    }
+    const initialParams = {0:{auraElement:"cryo"}, 1:{auraElement:"cryo"}, 2:{auraElement:"cryo"}, 3:{auraElement:"cryo"}};
+    params = Object.assign(initialParams, params);
     const c = attributes.constellation;
     const maxCount = Math.floor((12 + ((c >= 2)?6:0)) / 3), metaInterval=3, meta=Faruzan.talentMetas.q_c6_vortex;
     const firstTS = onfieldDurations[charIndex]+3;
-    const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, effectSchedules);
+    const actionsList = get_segment_offfield_actions(meta, firstTS, metaInterval, maxCount, charIndex, onfieldDurations, 0, effectSchedules, false, isCyclic);
     // 反应部分
-    let rxnMeta = null;
-    if(attributes.isStellarSwirl && params.element=="cryo"){
-      rxnMeta = {characterID: "Faruzan", element:"anemo", rxndmg:"reactionStellarSwirl", 
-                  ID:"reactionStellarSwirlAnemo", name:"反应星扩散:风", isOnfield:false};
-    }
-    else if(params.element != null && params.element !== "none"){
-      rxnMeta = {characterID: "Faruzan", element:params.element, rxndmg:"swirl", 
-                  ID:"reactionSwirl" + params.element.at(0).toUpperCase() + params.element.slice(1),
-                  name:ELEMENTS[params.element]+"扩散", isOnfield:false};
-    }
-    if(rxnMeta != null){
-      for(let actions of actionsList){
-        let i = 0;
-        while(i < actions.length){// 每一次后台风伤一次扩散，效果同样继承
-          let action = actions[i];
-          let reaction = {talentMeta:rxnMeta, repetitionCount:action.repetitionCount,
-                          ineffectiveEffectIDSet:structuredClone(action.ineffectiveEffectIDSet), timestamp:action.timestamp};
-          actions.splice(i+1, 0, reaction) // 在当前后台伤害的下一个位置插入反应
-          i += 2;
-        }
+    const paramsSegIndices = Object.keys(params).map(k => Number(k)).filter(v => (v<actionsList.length));
+    for(let idx of paramsSegIndices){
+      let actions = actionsList[idx], subparams = params[idx], auraElement = subparams.auraElement || null;
+      let rxndmg, metaID, metaName;
+      if(attributes.isStellarSwirl && auraElement=="cryo"){
+        rxndmg = "reactionStellarSwirl"; metaID="reactionStellarSwirlAnemo"; metaName = "反应星扩散:风";
+      }
+      else if(auraElement != null && auraElement !== "none"){
+        rxndmg = "swirl"; 
+        metaID="reactionSwirl" + auraElement.at(0).toUpperCase() + auraElement.slice(1);
+        metaName = ELEMENTS[auraElement]+"扩散";
+      }
+      if(rxndmg != undefined){
+        realize_elemental_reaction_in_actions(actions, rxndmg, auraElement, metaID, metaName, this.elementalApplicationManager);
       }
     }
     if(toMerge){
       for(let actions of actionsList){merge_actions_by_ineffectiveEffectIDSet(actions);}
+    }
+    // 附加 actionDetails 的信息
+    const detailsSegIndices = Object.keys(actionDetails).map(k => Number(k)).filter(v=>(v<actionsList.length));
+    for(let i of detailsSegIndices){
+      let actions = actionsList[i], details = actionDetails[i];
+      for(let action of actions){assign_details_to_action(action, details)};
     }
     return {actionsList,};
   },

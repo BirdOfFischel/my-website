@@ -405,6 +405,7 @@ export class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
     this.rank = rank;
     this.equipperID = equipperID;
     this.equipperName = equipperName;
+    this.targetID = undefined;
     this.effects = [
       {ID: this.ID + "_Effect", condition: {check:check_effect_of_weapon_ThrillingTalesofDragonSlayers},
       effect: (teamInitAttr, teamAttr, action, activated = false) => effect_of_weapon_ThrillingTalesofDragonSlayers(teamInitAttr, teamAttr, action, this, activated),
@@ -426,6 +427,7 @@ export class Weapon_ThrillingTalesofDragonSlayers{ // 法器：讨龙英杰谭
       }
     }
   };
+  update_target(targetID){this.targetID = targetID};
 }
 function check_effect_of_weapon_ThrillingTalesofDragonSlayers(teamInitialAttributes, charID, action){
   return teamInitialAttributes[charID].ThrillingTalesofDragonSlayersTarget ? true : false;

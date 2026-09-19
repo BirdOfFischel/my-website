@@ -125,6 +125,17 @@
       }
   .error-text {color : #a40505; font-size:8pt; margin:0}
   .separator-line {border:none; border-top:1px solid #ccc; margin:12px 0; }
+  /* 伤害详情弹窗(点击伤害表格表头触发) */
+  .dmg-detail-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; }
+  .dmg-detail-modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 20px; max-width: 1200px; width: 92%; max-height: 82vh; overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  .dmg-detail-modal .subtitle { font-size: 25px; color: var(--good); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .dmg-detail-modal h2 { font-size: 15px; color: var(--acc); margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; }
+  .dmg-detail-modal .modal-close { background: none; border: none; color: var(--dim); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .dmg-detail-modal .modal-close:hover { color: var(--txt); }
 
   </style>
 
@@ -168,19 +179,15 @@
 <div class="part">
   <h1>手法说明</h1>
   <p class="desc">无论什么配置，循环手法都为"奥黛塔EE -> 珐露珊EQ -> 沃雅妮莎E -> 薇斯纳一套"，其中薇斯纳一套的手法随命座变化有区别。
-    文档中假设薇斯纳普攻或重击需要4次才能攒满一层剑气，非6命薇斯纳需要通过普攻或重击的方式，无Q时攒满3层剑气，有Q时攒满2层剑气。
-    考虑到手法：(1) a1a2耗时1s，倍率1.761，攒0.5层剑气，攒2层需4s，攒3层需6s；
-    (2) a1-a4耗时2.25s，倍率4.041(秒均1.796)，攒1层剑气，攒2层需4.5s，攒3层需6.75s；
-    (3) a1-a6耗时3.45s，倍率6.703(秒均1.943)，攒1.5层剑气，攒3层需6.9s；
-    (4) a1-a3+z耗时3.25s，倍率5.501(秒均1.693)，攒1层剑气，攒2层需6.5s，攒3层需9.75s；
-    考虑到在珐露珊队伍中轴长至少19秒，队友耗时：奥黛塔2.5s，珐露珊2s，沃雅妮莎1s，薇斯纳可以站场约13.5秒；
-    薇斯纳打完 "e0(开启战技)+e1e2+e3*3" 的时间是5.79秒，"e0+e1e2+e3*4" 的时间是7.12秒，开大的时间是2.5秒，因此：
+    攒一层剑气需要6次风翎，其中普攻1、2、4、5段风翎为1，普攻3、重击、下落攻击的风翎为2，普攻6的风翎为3。
+    因为普攻6的风翎攒的最多，在一轮循环中尽可能多打a6。低命薇斯纳的q尽量后放吃整肃。
+    同时，考虑到q的出伤有延迟，当q后立刻释放e3时，q能吃到e3带来的整肃层数（2命以下），因此1命及以下的q放在最后。
   </p>
   <div class="dot desc">
-    <p>薇斯纳C0: (1)有Q时：e0 -> e1e2 -> q -> e3 -> a1a2a3a4 -> e3 -> a1a2a3a4 -> e3; 
+    <p>薇斯纳C0: (1)有Q时：e0 -> e1e2 -> a1a2a3a4a5a6 -> e3 -> a1a2a3 -> e3 -> e3 -> q(q在e3前释放，但出伤在后面); 
       (2)无Q时：e0 -> e1e2 -> a1a2a3a4a5a6 -> e3 -> a1a2a3a4a5a6 -> e3 -> e3；</p>
-    <p>薇斯纳C1-C5 (1)有Q时：手法为  e0 -> e1e2 -> a1a2 -> e3 -> a1a2 -> q -> (e3 -> a1a2)*2 -> e3；
-      (2)无Q时：e0 -> a1a2 -> e1 -> a1a2 -> e2 -> a1a2 -> e3 -> a1a2 -> (e3 -> a1a2)*2 -> e3；
+    <p>薇斯纳C1-C5 (1)有Q时：手法为  e0 -> e1e2e3 -> (2命q) -> a1a2a3a4a5a6 -> e3 -> a1a2a3 -> e3 -> e3 -> (1命q)；
+      (2)无Q时：e0 -> e1e2e3 -> a1a2a3a4a5a6 -> e3 -> a1a2a3a4a5a6 -> e3 -> e3；
     </p>
     <p>薇斯纳C6：(1)有Q时： e0 -> e1e2e3 -> step -> q -> (e3 -> step)*3 (step表示6命效果"变移")
       (2) 无Q时： e0 -> e1e2e3 -> step -> (e3 -> step)*3
