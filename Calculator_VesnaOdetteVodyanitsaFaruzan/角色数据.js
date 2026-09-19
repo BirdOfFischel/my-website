@@ -942,7 +942,14 @@ export const Vesna = {
   get_offfield_actionsObject(attributes, charIndex, onfieldDurations, effectSchedules={}, toMerge=false, isCyclic=true, params={}, actionDetails={}){// 获得角色后台时的actions，为数组
     // 反应星扩散冰 放在这里实现
     const initialParams = {firstTS:1.8};
+    const initialDetails = onfieldDurations.map(v => ({})); 
+    for(let details of initialDetails){details.parameters = {stacks:3}}; // 默认反应星扩散层数为3
     params = Object.assign(initialParams, params);
+    for(let i=0; i<onfieldDurations.length; i++){
+      if(actionDetails[i] == undefined){actionDetails[i] = initialDetails[i]}
+      else if(actionDetails[i].parameters == undefined){actionDetails[i].parameters = initialDetails[i].parameters}
+      else if(actionDetails[i].parameters.stacks == undefined){actionDetails[i].parameters.stacks = 3};
+    }
     const reactionStellarSwirlCryoTalentMeta = {characterID: null, element:"cryo", rxndmg:"reactionStellarSwirl",
                                                 ID:"reactionStellarSwirlCryo", name:"反应星扩散:冰", isOnfield:true};
     const maxCount = 6, metaInterval=3.1, meta=reactionStellarSwirlCryoTalentMeta;
@@ -954,7 +961,8 @@ export const Vesna = {
     // 附加 actionDetails 的信息
     const detailsSegIndices = Object.keys(actionDetails).map(k => Number(k)).filter(v=>(v<actionsList.length));
     for(let i of detailsSegIndices){
-      let actions = actionsList[i], details = actionDetails[i];
+      let actions = actionsList[i], details = actionDetails[i] ?? {};
+      details.parameters = details.parameters ?? {stacks:3};
       for(let action of actions){assign_details_to_action(action, details)};
     }
     return {actionsList,};
