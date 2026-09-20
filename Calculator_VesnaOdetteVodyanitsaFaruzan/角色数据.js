@@ -1715,7 +1715,7 @@ export const Faruzan = {
     4 : [],
     5 : [{ID:"Faruzan_Constellation5", condition:{characterIDs:["Faruzan"]}, effect:()=>({Q:3}),
           isNet:true, isPermanent:true, desc:"珐露珊命座5：抟风秘道的技能等级提高3级"}],
-    6 : [{ID:"Faruzan_Constellation6", condition:{elements:["anemo"]}, effect:()=>({cd:0.40}),
+    6 : [{ID:"Faruzan_Constellation6", condition:{elements:["anemo"], check:check_constellation_6_of_Faruzan}, effect:()=>({cd:0.40}),
           isNet:true, isPermanent:false, desc:"珐露珊命座6：处于祈风之赐下的角色造成风元素伤害时，暴击伤害提升40%"}],
   },
   parameters : {toCastE:true, toCastQ:true, toCastCharge:false},
@@ -1799,6 +1799,9 @@ function passive_talent_2_of_Faruzan(teamInitialAttributes, teamNetAttributes, a
   return {flatDMG : singleFlatDMG * repetitionCount * hitnum, singleFlatDMG, hitnum, repetitionCount, 
           consumption:null, remaining:null};
 };
+function check_constellation_6_of_Faruzan(teamInitialAttributes, charID, action){
+  return (teamInitialAttributes["Faruzan"]?.toCastQ === true) ? true : false;
+}
   
   // #endregion
 
