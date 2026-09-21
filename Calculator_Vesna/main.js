@@ -195,7 +195,7 @@ function get_configs(characters){
      Odette: {toCastE:true, toCastQ:false, isStellarSwirl:false,},
      Vodyanitsa: {toCastE:true, toCastQ:false,},
      Faruzan: {toCastE:true, toCastCharge:true, toCastQ:false,},
-     TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false,isStellarSwirl:false,}
+     TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false, isStellarSwirl:false, toDealStellar:false},
     }
   ];
   if(isDoubleAnemo){//双风时，奥黛塔第一轮能打星扩散
@@ -489,9 +489,8 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   for(let idx in sortedCharIDs){
     let i = Number(idx), charID = sortedCharIDs[i];
     if(derive_effect_origID(get_artifactSet_ID(characters[charID].artifactSet)) === "HeartoftheFurnace_4"){
-      let isStellarConduct = teamInitialAttributes[charID].isStellarConduct;
-      let isStellarSwirl = teamInitialAttributes[charID].isStellarSwirl;
-      if(!isStellarConduct && !isStellarSwirl){// 效果不触发
+      let toDealStellar = teamInitialAttributes[charID].toDealStellar;
+      if(!toDealStellar){// 效果不触发
         for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
           let details = {ineffectiveEffectIDSet: new Set([effect.ID])};
           for(let action of onfieldActions){assign_details_to_action(action, details)};
@@ -647,11 +646,12 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
 // 不需要开发者修改的部分
 const initialAdditionalAttributeParams = {
     Vesna : {ThrillingTalesofDragonSlayersTarget:true, toCastE:true, toCastQ:true, isStellarSwirl:true,
-       isStellarConduct:false, order:10000}, // order为角色登场顺序
-    Odette : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:1},
+       isStellarConduct:false, toDealStellar:true, order:10000}, // order为角色登场顺序
+    Odette : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, toDealStellar:true, order:1},
     Vodyanitsa : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:999},
     Faruzan : {toCastE:true, toCastQ:true, isStellarSwirl:true, isStellarConduct:false, order:100},
-    TravelerCryo : {toCastE:true, toCastQ:true, toCastCharge:true, isStellarSwirl:true, isStellarConduct:false, order:50},
+    TravelerCryo : {toCastE:true, toCastQ:true, toCastCharge:true, isStellarSwirl:true, isStellarConduct:false,
+                    toDealStellar:true, order:50},
 };
 
 const additionalAttributeParams = {
