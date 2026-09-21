@@ -2611,6 +2611,103 @@ function display_damage_details(wrapDetail, result){
   wrapDetail.appendChild(maindiv);
 }
 
+const DAMAGE_STAT_COLORS = ["#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de", "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#808080"]; // 扇形图配色
+
+function draw_damage_pie_chart(canvas, dataList){ // 在canvas上绘制扇形图，dataList: [{name, value, color}]
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const cx = W/2, cy = H/2, radius = Math.min(W, H)/2 - 12;
+  const total = dataList.reduce((acc, cur) => acc + cur.value, 0);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  if(!(total > 0)){// 没有伤害数据时画空圆
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI);
+    ctx.strokeStyle = "#888"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#aaa"; ctx.font = "14px sans-serif";
+    ctx.fillText("暂无伤害数据", cx, cy);
+    return;
+  }
+  let startAngle = -Math.PI/2;
+  for(let item of dataList){
+    const ratio = item.value / total;
+    const endAngle = startAngle + ratio * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = item.color;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)"; // 扇区之间的分隔线
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if(ratio >= 0.05){// 足够大的扇区内标注百分比
+      const midAngle = (startAngle + endAngle) / 2;
+      const labelR = radius * 0.62;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillText(`${(ratio*100).toFixed(1)}%`, cx + Math.cos(midAngle)*labelR, cy + Math.sin(midAngle)*labelR);
+    }
+    startAngle = endAngle;
+  }
+}
+
+function display_damage_statistics(wrap, charDMGMap, totalDMG){ // 在wrap中展示120秒流程的各角色伤害占比（扇形图+图例）
+  wrap.replaceChildren();
+  if(!(totalDMG > 0)){
+    const emptyText = document.createElement("span");
+    emptyText.className = "subtitle";
+    emptyText.textContent = "暂无伤害数据";
+    wrap.appendChild(emptyText);
+    return;
+  }
+  // 排序并分配颜色
+  const dataList = Object.entries(charDMGMap)
+    .map(([charID, dmg]) => ({charID, name: (characters[charID] ? characters[charID].name : "其他"), value: dmg}))
+    .sort((a, b) => b.value - a.value)
+    .map((item, idx) => ({...item, color: DAMAGE_STAT_COLORS[idx % DAMAGE_STAT_COLORS.length]}));
+  // 布局：左边扇形图，右边图例
+  const container = document.createElement("div");
+  container.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;gap:20px;padding:10px 0;";
+  const canvas = document.createElement("canvas");
+  canvas.width = 380; canvas.height = 300;
+  canvas.style.cssText = "max-width:100%;";
+  draw_damage_pie_chart(canvas, dataList);
+  container.appendChild(canvas);
+  const legend = document.createElement("div");
+  legend.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:260px;flex:1;";
+  for(let item of dataList){
+    const ratio = item.value / totalDMG;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;";
+    const swatch = document.createElement("span");
+    swatch.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:3px;background:${item.color};flex:none;`;
+    const nameSpan = document.createElement("span");
+    nameSpan.style.cssText = "flex:none;width:90px;";
+    nameSpan.textContent = item.name;
+    const barWrap = document.createElement("div");
+    barWrap.style.cssText = "flex:1;height:10px;background:rgba(128,128,128,0.2);border-radius:5px;overflow:hidden;";
+    const bar = document.createElement("div");
+    bar.style.cssText = `height:100%;width:${(ratio*100).toFixed(2)}%;background:${item.color};border-radius:5px;`;
+    barWrap.appendChild(bar);
+    const valueSpan = document.createElement("span");
+    valueSpan.style.cssText = "flex:none;width:150px;text-align:right;";
+    valueSpan.textContent = `${item.value.toFixed(0)}（${(ratio*100).toFixed(1)}%）`;
+    row.append(swatch, nameSpan, barWrap, valueSpan);
+    legend.appendChild(row);
+  }
+  container.appendChild(legend);
+  wrap.appendChild(container);
+  const note = document.createElement("div");
+  note.style.cssText = "color:#999;font-size:12px;margin-top:6px;";
+  note.textContent = `注：统计口径为120秒流程总伤害（含首轮、循环轮×轮数与尾轮），合计 ${totalDMG.toFixed(0)}。`;
+  wrap.appendChild(note);
+}
+
+
+
+
+
+
 function create_damage_display_part(damageId){// 设置伤害展示区
   const part = document.getElementById(damageId);
   update_team_cost();
@@ -2639,10 +2736,22 @@ function create_damage_display_part(damageId){// 设置伤害展示区
   partSubDiv1_h1.textContent = `计算表格`;
   partSubDiv1.appendChild(partSubDiv1_h1);
 
+  // 统计区
+  const partSubDiv2 = document.createElement("div");
+  partSubDiv2.className = "card";
+  partSubDiv2.style["margin-top"] = "10px";
+  part.appendChild(partSubDiv2);
+  const partSubDiv2_h1 = document.createElement("h1");
+  partSubDiv2_h1.textContent = `统计结果`;
+  partSubDiv2.appendChild(partSubDiv2_h1);
+  const partSubDiv2_body = document.createElement("div");
+  partSubDiv2.appendChild(partSubDiv2_body);
+
   beginBtn.onclick = function(){
     update_team_cost();
     subtitle.textContent = `伤害展示区(总金数${teamCost.toFixed(0)})`;
     partSubDiv1.replaceChildren();
+    partSubDiv2_body.replaceChildren();
     // 第一步：获得 configs，拆解并画按钮
     const configs = get_configs(characters);
     const tableElementsList = [], btnList = [];
@@ -2687,6 +2796,7 @@ function create_damage_display_part(damageId){// 设置伤害展示区
     // 第二步：计算伤害，并绘制表格（隐藏），存储表格对象
     let n = attrParamsList.length;
     let totalDMGs = [], totalTimes = [], cumulatedTime = 0, cumulatedDMG = 0;
+    const charDMGMap = {}; // 统计用：120秒流程内各角色的伤害累计
     for(let i=0; i<n; i++){
       update_additionalAttributeParams(attrParamsList[i]);
       initialize_toUpdateAttributes();
@@ -2699,6 +2809,10 @@ function create_damage_display_part(damageId){// 设置伤害展示区
       const [actionArray, totalTime] = get_action_array(teamInitialAttributes, characters, presetTotalTimes[i], fixedTotalTime,
             isCyclic, params, onfieldActionParamsList[i], onfieldActionDetailsList[i], offfieldActionParamsList[i], offfieldActionDetailsList[i]);
       const solve = simulate(actionArray, totalTime);
+      for(let r of solve.results){// 按角色累计伤害（乘以该配置的出现次数，得到120秒流程口径）
+        let id = r.characterID ?? "其他";
+        charDMGMap[id] = (charDMGMap[id] || 0) + r.dmg * cycleCounts[i];
+      }
       const tableElements = create_damage_table(partSubDiv1, solve, descList[i]);
       if(i !== 0){// 默认显示第一个，后续的全部隐藏
         for(let element of tableElements){
@@ -2720,6 +2834,8 @@ function create_damage_display_part(damageId){// 设置伤害展示区
         }
       }
     }
+    // 绘制统计区：120秒流程各角色伤害占比扇形图
+    display_damage_statistics(partSubDiv2_body, charDMGMap, cumulatedDMG);
     if(n>1){
       // 建立分割线
       const separator = document.createElement("hr"); separator.className = "separator-line";
