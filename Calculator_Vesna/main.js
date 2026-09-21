@@ -192,16 +192,21 @@ function get_configs(characters){
   // #region 起始轮
   const start_attrParamsList = [// 所有角色都不能放大招
     {Vesna: {toCastE:true, toCastQ:false, ThrillingTalesofDragonSlayersTarget:true}, // 首轮卡掉讨龙
-     Odette: {toCastE:true, toCastQ:false,},
+     Odette: {toCastE:true, toCastQ:false, isStellarSwirl:false,},
      Vodyanitsa: {toCastE:true, toCastQ:false,},
      Faruzan: {toCastE:true, toCastCharge:true, toCastQ:false,},
-     TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false,}
+     TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false,isStellarSwirl:false,}
     }
   ];
-  const start_onfieldActionParamsList = [
-    {Odette:{addedDuration:1}},  // 奥黛塔第一轮手法为 奥->珐->奥->沃，确保第一轮奥打出星扩散，时长+1秒切人
-  ];
+  const start_onfieldActionParamsList = [{},];
+  if(Object.keys(characters).includes("Odette") && isDoubleAnemo){ // 奥黛塔第一轮手法为 奥->珐->奥->沃，确保第一轮奥打出星扩散，时长+1秒切人
+    start_onfieldActionParamsList[0]["Odette"] = {addedDuration:1};
+  }
   const start_offfieldActionParamsList = [{}];
+  if(!isDoubleAnemo){ // 不是双风，那么只有最后一轮奥黛塔后台才是星扩散伤害
+    start_offfieldActionParamsList[0]["Odette"] = {};
+    start_offfieldActionParamsList[0]["Odette"].segmentParams = [{}, {}, {}, {isStellarSwirl:true}];
+  }
   const start_onfieldActionDetailsList = [{},];
   if(characters["Odette"]?.constellation < 6){
     start_onfieldActionDetailsList[0].Odette = {ineffectiveEffectIDSet: new Set(["Odette_Passive1_2"])};
@@ -434,7 +439,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
     maxCDs.push(characters[charID].get_max_CD(teamInitialAttributes[charID]));
   }
   // 如果 fixedTotalTime 给定，则将 totalTime 设为这个值，然后从 onfieldActions 中删去时间戳比这个值大的action
-  let totalTime, origOnfieldDurations;
+  let totalTime, origOnfieldDurations, isTruncated = false;
   if(fixedTotalTime >= swapTimeStamps.at(-1)){ // 固定时长不短于手法自然时长：无需裁剪，多余时间加在最后一段（空转）
     totalTime = fixedTotalTime;
     origOnfieldDurations = [...onfieldDurations];
@@ -455,6 +460,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
     n_chars = sortedCharIDs.length;
     totalTime = fixedTotalTime;
     origOnfieldDurations = [...onfieldDurations];
+    isTruncated = true;
   }
   else{
     totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));
@@ -545,32 +551,48 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   let effectActivatedTimestamps = {}, effectMaxTriggerCounts = {}, effects = {};
   effectIneffectiveRanges = {};
   // 沃雅妮莎的领唱效果
+  let soloMark = false, soloEffect = Vodyanitsa.effects[1];
   for(let idx in sortedCharIDs){
     let i = Number(idx), charID = sortedCharIDs[i];
     if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
-      let effect = Vodyanitsa.effects[1];
+      let effect = soloEffect;
       effects[effect.ID] = effect;
       effectMaxTriggerCounts[effect.ID] = 25;
-      effectActivatedTimestamps[effect.ID] = startTSs[0] ?? swapTimeStamps[i] + 1;
+      effectActivatedTimestamps[effect.ID] = [startTSs[0]] ?? [swapTimeStamps[i] + 1];
       effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 20, totalTime, isCyclic);
+      soloMark = true;
     }
   }
-  assign_effect_detials_to_actions(onfieldActions, teamInitialAttributes, totalTime, effects, effectActivatedTimestamps, 
+  if(soloMark){
+    assign_effect_detials_to_actions(onfieldActions, teamInitialAttributes, totalTime, effects, effectActivatedTimestamps, 
           effectIneffectiveRanges, effectMaxTriggerCounts, isCyclic);
+  }
+  else if(isTruncated && Object.keys(characters).includes("Vodyanitsa")){// 因为截断导致的沃雅妮莎不登场，这时候无条件排除
+    for(let action of onfieldActions){assign_details_to_action(action, {ineffectiveEffectIDSet:new Set([soloEffect.ID])})};
+  }
+  
   // 沃雅妮莎的重唱效果
   effectActivatedTimestamps = {}, effectMaxTriggerCounts = {}, effects = {}, effectIneffectiveRanges = {};
+  let ensembleMark = false, ensembleEffect = Vodyanitsa.effects[3];
   for(let idx in sortedCharIDs){
     let i = Number(idx), charID = sortedCharIDs[i];
     if(charID === "Vodyanitsa"){ // 因为羽毛很快就消耗完，这里对沃雅妮莎的效果做限制
-      let effect = Vodyanitsa.effects[3];
+      let effect = ensembleEffect;
       effects[effect.ID] = effect;
       effectMaxTriggerCounts[effect.ID] = 10;
-      effectActivatedTimestamps[effect.ID] = startTSs[0] ?? swapTimeStamps[i] + 1;
+      effectActivatedTimestamps[effect.ID] = [startTSs[0]] ?? [swapTimeStamps[i] + 1];
       effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 20, totalTime, isCyclic);
+      ensembleMark = true;
     }
   }
-  assign_effect_detials_to_actions(offfieldActions, teamInitialAttributes, totalTime, effects, effectActivatedTimestamps, 
+  if(ensembleMark){
+    assign_effect_detials_to_actions(offfieldActions, teamInitialAttributes, totalTime, effects, effectActivatedTimestamps, 
           effectIneffectiveRanges, effectMaxTriggerCounts, isCyclic);
+  }
+  else if(isTruncated && Object.keys(characters).includes("Vodyanitsa")){
+    for(let action of offfieldActions){assign_details_to_action(action, {ineffectiveEffectIDSet:new Set([ensembleEffect.ID])})};
+  }
+  
   // #endregion
 
   // #region 根据效果实际触发的时间来设置初始参数
@@ -607,7 +629,7 @@ const initialAdditionalAttributeParams = {
     Odette : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:1},
     Vodyanitsa : {toCastE:true, toCastQ:false, isStellarSwirl:true, isStellarConduct:false, order:999},
     Faruzan : {toCastE:true, toCastQ:true, isStellarSwirl:true, isStellarConduct:false, order:100},
-    TravelerCryo : {toCastE:true, toCastQ:true, toCastCharge:true, isStellarSwirl:true, isStellarConduct:false, order:200},
+    TravelerCryo : {toCastE:true, toCastQ:true, toCastCharge:true, isStellarSwirl:true, isStellarConduct:false, order:50},
 };
 
 const additionalAttributeParams = {
@@ -626,6 +648,7 @@ initialize_additionalAttributeParams();
 
 const availableCharIDSet = new Set(Object.keys(initialAdditionalAttributeParams));
 function update_additionalAttributeParams(newAttrParams){
+  initialize_additionalAttributeParams();
   for(let charID of Object.keys(newAttrParams)){
     if(availableCharIDSet.has(charID)){Object.assign(additionalAttributeParams[charID], newAttrParams[charID])};
   }

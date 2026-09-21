@@ -202,6 +202,7 @@ export function get_effect_ineffective_ranges(startTimestamps, effectDuration, t
   else{
     for(let i=0; i<N; i++){
       let range = effectiveRanges[i];
+      if(range[0] > totalTime){range[0] = totalTime;}
       if(range[1] > totalTime){range[1] = totalTime;}
     }
     ineffectiveRanges = subtractIntervals(totalTime, effectiveRanges).map(([a,b]) => ([a+2*EPSILON, b-2*EPSILON]));
