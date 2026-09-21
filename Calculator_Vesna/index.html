@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原神薇斯纳固定配队、固定流程拉表</title>
+  <style>
+  :root {
+    --bg: #0f1420; --panel: #1a2233; --panel2: #232e45; --line: #33415c; --part:#151b2a;
+    --txt: #e8edf6; --dim: #93a0b8; --acc: #6fd3ff; --good: #7ee0a0;
+    --dropped : #3d444e; --boxbg:#141a27;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font: 15px/1.55 "Segoe UI", "Microsoft YaHei", sans-serif; padding: 24px; }
+  .title {font-size: 40px; margin-bottom: 5px; font-weight: bold; max-width: 1500px}
+  .dot p {position: relative; padding-left: 0.8em; text-indent: -0.8em; line-height: 1.8;}
+  .dot p::before {content: "•"; margin-right: 0.4em; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .subtitle {font-size: 30px; margin-bottom: 5px; font-weight: bold;}
+  .subtitle_btn {display: grid; grid-template-columns:0.8fr 0.2fr; gap:12pt; align-items: center; max-width: 1500px; margin: 0 auto;}
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 18px; max-width: 1500px}
+  .desc {color: var(--dim); font-size: 12px; }
+  .desc-box { color: var(--dim); font-size: 12px; max-height: 100px; overflow-y: auto; }
+  .desc-box p + p { margin-top: 4px; }
+  .hidden {display : none}
+  .grid { display: grid; grid-template-columns: 1.3fr 0.9fr; gap: 16px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .part {background:var(--part); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 auto 16px;
+         max-width: 1500px; align-items: center;}
+  .part2 {background:var(--part); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+         max-width: 1500px; align-items: center;}
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 14px; color: var(--acc); margin-bottom: 10px; }
+  .name_input_desc {display: grid; grid-template-columns: 110px 0.2fr 0.8fr; gap: 6px; align-items: center; padding: 8px 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); margin-top: 6px;}
+  .name_input_desc > div:first-of-type { text-align: center; }
+  .name_input_desc h2 {margin: 0; }
+  .name_input2_desc {display: grid; grid-template-columns: 110px 0.2fr 0.15fr 0.65fr; gap: 6px; align-items: center; padding: 8px 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); margin-top: 6px;}
+  .name_input2_desc > div:first-of-type { text-align: center; }
+  .name_input2_desc h2 {margin: 0; }
+  .slot { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; padding: 3px 0; border-top: 1px dashed var(--line); }
+  .slot:first-of-type { border-top: none; }
+  .slot .name { font-weight: 600; }
+  .slot span { text-align: center; }
+  select, input[type=number] { background: var(--panel2); color: var(--txt); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
+  select { width: 100%; }
+  input[type=number] { width: 40px; text-align: center; }
+  .substats { display: flex; gap: 6px 12px; flex-wrap: wrap; }
+  .substats span { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .ally { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-top: 6px; background: var(--panel2); }
+  .ally .ah { color: var(--acc); font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .ally .master { font-size: 12px; margin-bottom: 6px; }
+  .btn { background: var(--acc); border: none; color: #0f1420; border-radius: 8px; padding: 6px 12px; font-weight: 600; cursor: pointer; margin-right: 8px; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn2 { background: var(--panel2); color: var(--txt); }
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat { background: var(--panel2); border-radius: 10px; padding: 10px 12px; }
+  .stat .statName { font-size: 12px; color: var(--txt); }
+  .stat .statValue { font-size: 22px; font-weight: 700; color: var(--good); }
+  .stat .statValue small { font-size: 11px; color: var(--dim); font-weight: 400; }
+  .note { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  .detailCell { background: none; border: none; color: var(--good); font-weight: 700; cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+  .detailCell:hover { background: rgba(126, 224, 160, 0.15); }
+  /* 词条增益详情弹窗 */
+  .stat-detail-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; }
+  .stat-detail-modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 20px; max-width: 520px; width: 90%; max-height: 70vh; overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  .stat-detail-modal h2 { font-size: 15px; color: var(--acc); margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; }
+  .stat-detail-modal .modal-close { background: none; border: none; color: var(--dim); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .stat-detail-modal .modal-close:hover { color: var(--txt); }
+  .stat-detail-modal p { font-size: 13px; line-height: 1.9; }
+  .stat-detail-modal p .buff-name { color: #ffffff; }
+  .stat-detail-modal p .buff-value { color: var(--good); font-weight: 700; }
+  .stat-detail-modal p .v-red { color: #ff8484; font-weight: 700; }
+  .stat-detail-modal p .v-blue { color: var(--acc); font-weight: 700; }
+  .stat-detail-modal p .v-gold { color: #d4af37; font-weight: 700; }
+  .stat-detail-modal .modal-empty { color: var(--dim); font-size: 13px; }
+  .clickableth { cursor: pointer; }
+  .clickableth:hover { background: #2a2308 !important; }
+  .table-wrap {overflow-x: auto; max-width: 100%; margin-top: 8px; border: 1px solid #d4af37; border-radius: 8px;}
+  table.dmg { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 11px; }
+  table.dmg th { background: var(--panel2); color: var(--acc); position: sticky; top: 0; }
+  table.dmg td.lbl { background: var(--panel2); color: var(--dim); font-weight: 600; position: sticky; left: 0; }
+  table.dmg tr.total td { background: var(--panel2); color: var(--good); font-weight: 700; }
+  table.dmg th, table.dmg td {border: 1px solid #d4af37; background: #000; color: #c6ccd7; font-weight: 400; padding: 5px 7px;
+         text-align: center; white-space: nowrap; }
+  table.dmg thead th { color: #fff; background: #000; font-weight: 700; border-bottom: 3px solid #d4af37;}
+  table.dmg th.lbl {color: #d4af37; background: #000; font-weight: 700; position: sticky; left: 0;}
+  /* 伤害表达式 */
+  .expr-scroll { overflow-x: auto; padding: 6px 2px; }
+  .expr-row { display: flex; align-items: flex-start; gap: 6px; width: max-content; margin: 8px 0 14px; }
+  .expr-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .expr-box { background: #232e45; border: 1px solid var(--line); border-radius: 6px;
+              padding: 6px 10px; font-size: 18px; font-weight: 700; color: var(--good); white-space: nowrap; }
+  .expr-box.expr-dmg { color: #ffd700; border-color: #d4af37; }
+  .expr-name { font-size: 11px; color: var(--dim); white-space: nowrap; }
+  .expr-op { font-size: 18px; font-weight: 700; color: var(--txt); padding-top: 6px; }
+  .detail-grid { display: flex; flex-direction: column; gap: 16px; max-width: 100%; }
+  .detail-grid > div { min-width: 0; }
+  .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel-grid > div { min-width: 0; }
+  .result-display {display: flex; align-items: center; gap: 6px; margin-top:12px; width: max-content;}
+  .result-display.hidden {display: none;}
+  .result-display span {color:var(--txt); font-size:18px; margin:0; line-height: 1; font-weight: bold;}
+  .result-display-box { background: #232e45; border: 1px solid #d4af37; border-radius: 6px;
+                        padding: 6px 10px; font-size: 18px; font-weight: 700; color: #d1b411; white-space: nowrap; }
+  /* 角色选择 */
+  .char-select-part {display: grid; grid-template-columns: 0.9fr 1.0fr; gap: 16px; max-width: 1500px; margin: 0 auto;}
+  .char-select-candidate {display:flex; align-items: flex-start; gap: 6px; width: auto; margin: 10px; flex-wrap: wrap; 
+                          background: var(--boxbg); min-height: 200px;}
+  .char-select-result {display:flex; flex-direction: column; gap: 8px; width: auto; margin:10px 2px 20px;}
+  .char-select-h1-row {display: grid; grid-template-columns: 150px 1fr; gap: 1px; align-items: center; padding: 8px 3px; border: 1px solid var(--line); 
+                       border-radius: 10px; background: var(--boxbg); margin-top: 1px; height: 90px;}
+  .char-select-h1-row h1 {margin: 0px; text-align: center;}
+  .char-select-row {display:flex; align-items: flex-start; gap:10px}
+  .errdesc-btn {display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;}
+  .charbox {width: 100px; height: 50px; background-color: #ddd; color:#000; font-size: 14px; font-weight: bold;
+      border: 2px solid #999; border-radius: 6px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; user-select: none;             /* 防止连点选中文字 */
+      transition: background-color 0.2s, border-color 0.2s; }
+  .charbox.selected {background-color: #4caf50; border-color: #2e7d32; color: #fff;}
+  .charbox2 {width: 100px; height: 50px; background-color: #1a2233; color: #fff; font-size: 14px; font-weight: bold;
+      border: 2px solid #d4af37; border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; user-select: none;             /* 防止连点选中文字 */
+      }
+  .error-text {color : #a40505; font-size:8pt; margin:0}
+  .separator-line {border:none; border-top:1px solid #ccc; margin:12px 0; }
+  /* 伤害详情弹窗(点击伤害表格表头触发) */
+  .dmg-detail-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; }
+  .dmg-detail-modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 20px; max-width: 1200px; width: 92%; max-height: 82vh; overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  .dmg-detail-modal .subtitle { font-size: 25px; color: var(--good); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .dmg-detail-modal h2 { font-size: 15px; color: var(--acc); margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; }
+  .dmg-detail-modal .modal-close { background: none; border: none; color: var(--dim); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .dmg-detail-modal .modal-close:hover { color: var(--txt); }
+
+  </style>
+
+</head>
+
+<body>
+<!-- 标题部分 -->
+<p class = "title" >薇斯纳伤害计算器</p>
+<div class="sub" >在给定配队、装备、流程的情况下，通过改变角色配置，得到对应的dps估计。 Bird of Fischel</div>
+
+<div class = "part dot"> 
+  <h1>使用说明</h1>
+  <div class="desc" >
+    <p>本文档实现了在必选角色为薇斯纳，候选角色为奥黛塔、沃雅妮莎、珐露珊、旅行者·冰的情况下，面对110级、10全抗敌人打桩的总伤和DPS计算。
+       计算流程分为首轮、循环轮和尾轮，首轮若有讨龙则卡讨龙，循环轮若有讨龙则按照"有无讨龙"交替进行，以两轮为一个循环。
+       薇斯纳设置成只有队伍双风或者薇斯纳携带"蝶变"或"白湖冬羽"时才能做到每轮放大，否则一轮一大。
+      </p>
+    <p>在本文档中，用户可以自由 设置角色的圣遗物词条、角色等级、角色命座、角色武器、角色武器精炼的数据。点击"计算面板"或右侧的"初始面板"，
+       算法将自动计算当前角色在未入队时的初始面板数据和生效效果；当用户点击"前台面板"时，计算当前角色在前台时能吃到的所有增益效果，
+       展示角色对应的面板和生效效果描述；当用户点击"后台面板"时，则展示当前角色在后台吃到所有增益效果后的面板和相应效果描述。
+    </p>
+    <p>当用户设置好角色配置时，点击下方的"开始计算"，算法将按照文档内预设的手法计算用户配置下的输出循环的各段伤害、总伤和对应的DPS。
+       用户可以点击"各段伤害计算表"的表头序号，得到每段伤害计算的细节，包括伤害计算表达式、当前角色面板和生效效果
+       (由于舍入误差问题，伤害计算表达式两端的数值并不完全相等)。</p>
+    <p>在伤害计算过程中，为了简化计算，文档中定义了"重复次数"变量，指在一轮循环中重复出现的、受增益效果不变的多次同类型伤害的次数，
+       文档中将这类伤害合并处理(如X次星扩散风伤、X次星扩散冰伤)，并在伤害表达式中定义"重复次数"为一个乘区参与计算。
+       特别地，当攻击具有羽毛增益时，羽毛增益的计算结果本身就考虑了"重复次数"影响，故表达式中羽毛增益不会与"重复次数"相乘。
+    </p>
+  </div>
+</div>
+
+<!-- 角色配置部分 -->
+<div class="part hidden" id="character_selection_part" ></div>
+<div class="grid">
+  <div class="part2" id="character_build_part">
+  </div>
+
+  <div class="part2" id="character_display_part">
+  </div>
+</div>
+
+<!-- 计算伤害部分 -->
+<div class="part">
+  <h1>手法说明</h1>
+  <p class="desc">薇斯纳一套的手法随命座变化有区别。
+    攒一层剑气需要6次风翎，其中普攻1、2、4、5段风翎为1，普攻3、重击、下落攻击的风翎为2，普攻6的风翎为3。
+    因为普攻6的风翎攒的最多，在一轮循环中尽可能多打a6。低命薇斯纳的q尽量后放吃整肃。
+    同时，考虑到q的出伤有延迟，当q后立刻释放e3时，q能吃到e3带来的整肃层数（2命以下），因此1命及以下的q放在最后。
+  </p>
+  <div class="dot desc">
+    <p>薇斯纳C0: (1)有Q时：e0 -> e1e2 -> a1a2a3a4a5a6 -> e3 -> a1a2a3 -> e3 -> e3 -> q(q在e3前释放，但出伤在后面); 
+      (2)无Q时：e0 -> e1e2 -> a1a2a3a4a5a6 -> e3 -> a1a2a3a4a5a6 -> e3 -> e3；</p>
+    <p>薇斯纳C1-C5 (1)有Q时：手法为  e0 -> e1e2e3 -> (2命q) -> a1a2a3a4a5a6 -> e3 -> a1a2a3 -> e3 -> e3 -> (1命q)；
+      (2)无Q时：e0 -> e1e2e3 -> a1a2a3a4a5a6 -> e3 -> a1a2a3a4a5a6 -> e3 -> e3；
+    </p>
+    <p>薇斯纳C6：(1)有Q时： e0 -> e1e2e3 -> step -> q -> (e3 -> step)*3 (step表示6命效果"变移")
+      (2) 无Q时： e0 -> e1e2e3 -> step -> (e3 -> step)*3
+    </p>
+  </div>
+</div>
+<div class="part" id="damage_display_part">
+  <div>
+
+  </div>
+
+</div>
+
+<script type="module" src="./main.js">
+
+
+</script>
+</body>
+
+
+</html>
+
+
+
+
