@@ -259,7 +259,7 @@ function get_configs(characters){
   // #region 循环轮
     // 判断是每轮开大还是两轮一大（由于开局卡掉讨龙，有大轮必有讨龙）
   let cycle_attrParamsList, cycle_descList, cycle_buttonNames;
-  if(isDoubleAnemo || withEnergyWeapon){// 有充能武器或者双风则每轮开大
+  if(isDoubleAnemo && withEnergyWeapon){// 有充能武器且双风则每轮开大
     if(withDragon){// 有讨龙则需要区分
       cycle_attrParamsList = [
         { Vesna: {toCastE:true, toCastQ:true, ThrillingTalesofDragonSlayersTarget:true},
