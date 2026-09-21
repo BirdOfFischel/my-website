@@ -203,7 +203,7 @@ function get_configs(characters){
   ];
   const start_offfieldActionParamsList = [{}];
   const start_onfieldActionDetailsList = [{},];
-  if(characters["Odette"].constellation < 6){
+  if(characters["Odette"]?.constellation < 6){
     start_onfieldActionDetailsList[0].Odette = {ineffectiveEffectIDSet: new Set(["Odette_Passive1_2"])};
   }
   const start_offfieldActionDetailsList = [{}];
