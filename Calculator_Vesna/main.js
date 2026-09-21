@@ -538,13 +538,19 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
                 && action.talentMeta.isOnfield === true;
       });
       let startTSs = indices.map(idx => (onfieldActions[idx].timestamp));
-      if(startTSs.length === 0){startTSs = [swapTimeStamps[i+1]];} // 空的话就用下一个角色的登场时间为起始
-      for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
-        effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 12, totalTime, isCyclic);
-        effectTargets[effect.ID] = sortedCharIDs;
+      if(startTSs.length === 0){// 空的话表示此轮不放大招，直接全部置为不生效
+        let set = new Set(characters[charID].artifactSet[0][0].setEffects[4].map(effect => effect.ID));
+        let details = {ineffectiveEffectIDSet:set};
+        for(let action of onfieldActions){assign_details_to_action(action, details)};
+        for(let action of offfieldActions){assign_details_to_action(action, details)};
+      } 
+      else{
+        for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
+          effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 12, totalTime, isCyclic);
+          effectTargets[effect.ID] = sortedCharIDs;
+        }
       }
     };
-
     if(derive_effect_origID(get_artifactSet_ID(characters[charID].artifactSet)) === "TenacityoftheMillelith_4" && teamInitialAttributes[charID].toCastE===true){
       // 千岩，找到角色放战技的时间戳为起始点，以后台战技持续时间+3为效果持续时间
       let indices = findAllIndex(onfieldActions, (action)=>{
@@ -554,7 +560,12 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
       let startTSs = indices.map(idx => (onfieldActions[idx].timestamp));
       const durationDict = {Vodyanitsa:16+3, TravelerCryo:3 + (teamInitialAttributes["TravelerCryo"]?.constellation >= 4? 15:12)}
       let duration = durationDict[charID]; //效果持续时间
-      if(startTSs.length === 0){startTSs = [swapTimeStamps[i+1]];} // 空的话就用下一个角色的登场时间为起始
+      if(startTSs.length === 0){// 空的话就用下一个角色的登场时间为起始
+        let set = new Set(characters[charID].artifactSet[0][0].setEffects[4].map(effect => effect.ID));
+        let details = {ineffectiveEffectIDSet:set};
+        for(let action of onfieldActions){assign_details_to_action(action, details)};
+        for(let action of offfieldActions){assign_details_to_action(action, details)};
+      } 
       for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
         effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, duration, totalTime, isCyclic);
         effectTargets[effect.ID] = sortedCharIDs;

@@ -111,7 +111,9 @@ export class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
       2: [{ID: this.ID+"_Piece_2", condition: {characterIDs: [this.equipperID]}, effect: piece_2_of_TenacityoftheMillelith,
           isNet: true, isPermanent: true,
           get desc() {return `千岩牢固二件套：提升装备者${self.equipperName}20%的最大生命值`}}],
-      4: [{ID: this.ID+"_Piece_4", condition: {}, effect: piece_4_of_TenacityoftheMillelith,
+      4: [{ID: this.ID+"_Piece_4", 
+          condition: {check:(teamInitialAttributes, charID, action)=>check_piece_4_of_TenacityoftheMillelith(teamInitialAttributes, charID, action, this)}, 
+          effect: piece_4_of_TenacityoftheMillelith,
           isNet: true, isPermanent: false, isOnly:true,
           get desc() {return `千岩牢固四件套：提升全体角色20%攻击力和30%护盾强效`}},
           ],
@@ -134,8 +136,12 @@ export class ArtifactSet_TenacityoftheMillelith{// 千岩牢固
     }
   }
 }
+function check_piece_4_of_TenacityoftheMillelith(teamInitialAttributes, charID, action, artifactSet){
+  return teamInitialAttributes[artifactSet.equipperID]?.toCastE === true ? true : false;
+}
 function piece_2_of_TenacityoftheMillelith(teamInitialAttributes, teamNetAttributes, action, activated = false){return {hpp:0.2}};
 function piece_4_of_TenacityoftheMillelith(teamInitialAttributes, teamNetAttributes, action, activated = false){return {atkp:0.2, ss:0.3}}
+
 
 export class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
   constructor(ID = "NoblesseOblige", equipperID = undefined, equipperName = equipperID){
@@ -148,7 +154,9 @@ export class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
       2 : [{ID:this.ID+"_Piece_2", condition:{characterIDs:[this.equipperID], attackTypes:["burst"]}, effect:piece_2_of_NoblesseOblige,
             isNet : true, isPermanent:false,
             get desc(){return `昔日宗室之仪二件套：提升装备者${self.equipperName}20%元素爆发伤害`}}],
-      4 : [{ID:this.ID+"_Piece_4", condition:{}, effect:piece_4_of_NoblesseOblige,
+      4 : [{ID:this.ID+"_Piece_4", 
+            condition:{check:(teamInitialAttributes, charID, action)=>check_piece_4_of_NoblesseOblige(teamInitialAttributes, charID, action, this)}, 
+            effect:piece_4_of_NoblesseOblige,
             isNet : true, isPermanent:false, isOnly:true,
             desc:"昔日宗室之仪四件套：施放元素爆发后，队伍中所有角色攻击力提升20%，持续12秒"}],
     };
@@ -170,6 +178,9 @@ export class ArtifactSet_NoblesseOblige{// 昔日宗室之仪
     }
   };
 };
+function check_piece_4_of_NoblesseOblige(teamInitialAttributes, charID, action, artifactSet){
+  return teamInitialAttributes[artifactSet.equipperID]?.toCastQ === true ? true : false;
+}
 function piece_2_of_NoblesseOblige(teamInitialAttributes, teamNetAttributes, action, activated = false){
     return {burstDMG:0.2}; 
 };
