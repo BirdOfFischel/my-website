@@ -6,7 +6,7 @@
 // 角色的 talentMeta 可以有额外变量 constellation，表示命座要求
 // 角色中的 parameters 参数和 teamParameters 只在面板初始化时修改（即只受到permanent效果的影响），在计算过程中不改变这个参数；可变参数放在 variables
 /* 表示状态的通用 parameters 有：
-    1. 技能相关：toCastQ(是否释放大招), toCastE(是否释放元素战技), toCastCharge(是否释放重击), 
+    1. 技能相关：toCastQ(是否释放大招), toCastE(是否释放元素战技), toCastCharge(是否释放重击), toDealStellarSwirl(造成星扩散伤害)
     2. 状态相关：isStellarConduct(是否星超导), isStellarSwirl(是否星扩散), isHealed(是否被治愈，特指满血无契), isFrozen(是否冻结)
 
 */
@@ -333,12 +333,15 @@ export function assign_effect_detials_to_actions(actions, teamInitialAttributes,
     const effect = effects[effectID];
     let restEffectiveCount = maxCount;
     let startActionIndex = find_action_index_by_larger_timestamp(activatedTS, actions);
+    if(!isCyclic){// 如果不是循环轮，在这之前的行为全部加上标记
+      for(let i=0; i<startActionIndex; i++){addIneffectiveID(actions[i], effectID)};
+    }
     for(let i=0; i<n_actions; i++){
       let actionIdx = isCyclic ? mod(startActionIndex+i, n_actions) : startActionIndex+i;
       if(actionIdx >= n_actions){break;}
       let action = actions[actionIdx];
       let isIneffective = check_action_in_timestamp_ranges(action, ineffectiveRangs);
-      if(isIneffective){addIneffectiveID(action, effectID)}
+      if(isIneffective){addIneffectiveID(action, effectID);}
       else{
         if(restEffectiveCount > 0){
           let isEffective = true;

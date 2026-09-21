@@ -579,9 +579,10 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
       let effect = soloEffect;
       effects[effect.ID] = effect;
       effectMaxTriggerCounts[effect.ID] = 25;
-      effectActivatedTimestamps[effect.ID] = [startTSs[0]] ?? [swapTimeStamps[i] + 1];
+      effectActivatedTimestamps[effect.ID] = startTSs[0] ?? swapTimeStamps[i] + 1;
       effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 20, totalTime, isCyclic);
       soloMark = true;
+      break;
     }
   }
   if(soloMark){
@@ -601,9 +602,10 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
       let effect = ensembleEffect;
       effects[effect.ID] = effect;
       effectMaxTriggerCounts[effect.ID] = 10;
-      effectActivatedTimestamps[effect.ID] = [startTSs[0]] ?? [swapTimeStamps[i] + 1];
+      effectActivatedTimestamps[effect.ID] = startTSs[0] ?? swapTimeStamps[i] + 1;
       effectIneffectiveRanges[effect.ID] = get_effect_ineffective_ranges(startTSs, 20, totalTime, isCyclic);
       ensembleMark = true;
+      break;
     }
   }
   if(ensembleMark){
@@ -617,19 +619,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   // #endregion
 
   // #region 根据效果实际触发的时间来设置初始参数
-/*   if(isCyclic){
-    // 循环时，冰旅行者的寒辉层数一开始不是0，从第一次放Q的位置开始计算，到循环结尾的层数为初始层数
-    if(sortedCharIDs.includes("TravelerCryo")){
-      let QIndex = onfieldActions.findIndex(x => (x.talentMeta?.characterID==="TravelerCryo" && x.talentMeta?.attackType==="burst" 
-                                              && x.talentMeta?.isOnfield === true
-                                            ));
-      let startTS = (QIndex < 0)? 0 : onfieldActions[QIndex].timestamp + EPSILON;
-      let eOffIndices = findAllIndex(offfieldActions, (x) => (x.talentMeta?.characterID==="TravelerCryo" && x.talentMeta?.ID === "eOff_ice_crystal" 
-                                                                && x.timestamp > startTS));
-      let count = eOffIndices.length;
-      teamInitialAttributes["TravelerCryo"].currFrostGlow = count;
-    }
-  } */
+
   // #endregion
 
   // 聚合
