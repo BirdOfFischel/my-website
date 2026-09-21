@@ -198,9 +198,8 @@ function get_configs(characters){
      TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false,isStellarSwirl:false,}
     }
   ];
-  if(isDoubleAnemo){//双风时，奥黛塔和冰主第一轮能打星扩散
+  if(isDoubleAnemo){//双风时，奥黛塔第一轮能打星扩散
     start_attrParamsList[0].Odette.isStellarSwirl = true;
-    start_attrParamsList[0].TravelerCryo.isStellarSwirl = true;
   }
   const start_onfieldActionParamsList = [{},];
   if(Object.keys(characters).includes("Odette") && isDoubleAnemo){ // 奥黛塔第一轮手法为 奥->珐->奥->沃，确保第一轮奥打出星扩散，时长+1秒切人
@@ -486,6 +485,24 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
   }
   offfieldActions.sort((a,b) => a.timestamp - b.timestamp);
 
+  // #region 根据触发条件判断本轮效果是否存在
+  for(let idx in sortedCharIDs){
+    let i = Number(idx), charID = sortedCharIDs[i];
+    if(derive_effect_origID(get_artifactSet_ID(characters[charID].artifactSet)) === "HeartoftheFurnace_4"){
+      let isStellarConduct = teamInitialAttributes[charID].isStellarConduct;
+      let isStellarSwirl = teamInitialAttributes[charID].isStellarSwirl;
+      if(!isStellarConduct && !isStellarSwirl){// 效果不触发
+        for(let effect of characters[charID].artifactSet[0][0].setEffects[4]){
+          let details = {ineffectiveEffectIDSet: new Set([effect.ID])};
+          for(let action of onfieldActions){assign_details_to_action(action, details)};
+          for(let action of offfieldActions){assign_details_to_action(action, details)};
+        }
+      }
+    }
+  }
+
+  // #endregion
+
   // #region 根据效果的持续时间来判定失效行为
   /* {效果ID：[[失效范围1], ...]}, {效果ID：[效果生效的角色ID]}
   */
@@ -507,7 +524,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
         else{effectTargets[effect.ID] = []};
       }
     };
-    if(get_artifactSet_ID(characters[charID].artifactSet) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
+    if(derive_effect_origID(get_artifactSet_ID(characters[charID].artifactSet)) === "NoblesseOblige_4" && teamInitialAttributes[charID].toCastQ===true){
       // 宗室, 先找到角色释放大招的时间戳，以此为起始点
       let indices = findAllIndex(onfieldActions, (action)=>{
         return action.talentMeta.attackType === "burst" && action.timestamp != undefined && action.talentMeta.characterID === charID
@@ -521,7 +538,7 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
       }
     };
 
-    if(get_artifactSet_ID(characters[charID].artifactSet) === "TenacityoftheMillelith_4" && teamInitialAttributes[charID].toCastE===true){
+    if(derive_effect_origID(get_artifactSet_ID(characters[charID].artifactSet)) === "TenacityoftheMillelith_4" && teamInitialAttributes[charID].toCastE===true){
       // 千岩，找到角色放战技的时间戳为起始点，以后台战技持续时间+3为效果持续时间
       let indices = findAllIndex(onfieldActions, (action)=>{
         return action.talentMeta.attackType === "skill" && action.timestamp != undefined && action.talentMeta.characterID === charID
