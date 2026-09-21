@@ -1820,6 +1820,10 @@ let onDisplayCharacterID = Object.keys(characters)[0]; // 应当展示的角色�
 function create_character_build_part(buildId){// 建立若干个div区域用来填写角色配置，每个区域对应一个角色，这些区域挂靠在一个id div区域下
   const maindiv = document.getElementById(buildId); // 父div的id
   maindiv.replaceChildren(); // 删除原有残留
+  if(!Object.keys(characters).includes(onDisplayCharacterID)){
+    onDisplayCharacterID = Object.keys(characters)[0]; // 表示角色已经更新，要重置展示角色
+    onDisplayCharacterBuildDivId = onDisplayCharacterID + "_characterBuildDiv";
+  }
   const maindiv_subtitleBtn = document.createElement("div");
   maindiv_subtitleBtn.className = "subtitle_btn";
   const maindiv_subtitleBtn_span = document.createElement("span");
