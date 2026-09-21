@@ -75,7 +75,7 @@ export class ArtifactSet_HeartoftheFurnace { // 炉火融炼之心
           isNet: true, isPermanent: false, isOnly:true, // 表示效果唯一
           get desc() {return `炉火融炼之心四件套：提升装备者${self.equipperName}12%攻击力`}},
           {ID: this.ID+"_Piece_4_2", condition: {}, effect: piece_4_2_of_HeartoftheFurnace,
-          isNet: true, isPermanent: false,
+          isNet: true, isPermanent: false, isOnly:true,
           desc: "炉火融炼之心四件套：全队星烁反应伤害提升50%"}],
     };
     this.parameters = {}; // 自己效果要用的参数
