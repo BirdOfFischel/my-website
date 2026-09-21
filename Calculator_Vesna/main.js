@@ -198,6 +198,10 @@ function get_configs(characters){
      TravelerCryo:{toCastE:true, toCastCharge:false, toCastQ:false,isStellarSwirl:false,}
     }
   ];
+  if(isDoubleAnemo){//双风时，奥黛塔和冰主第一轮能打星扩散
+    start_attrParamsList[0].Odette.isStellarSwirl = true;
+    start_attrParamsList[0].TravelerCryo.isStellarSwirl = true;
+  }
   const start_onfieldActionParamsList = [{},];
   if(Object.keys(characters).includes("Odette") && isDoubleAnemo){ // 奥黛塔第一轮手法为 奥->珐->奥->沃，确保第一轮奥打出星扩散，时长+1秒切人
     start_onfieldActionParamsList[0]["Odette"] = {addedDuration:1};
@@ -463,7 +467,8 @@ function get_action_array(teamInitialAttributes, characters, presetTotalTime=und
     isTruncated = true;
   }
   else{
-    totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));
+    if(isCyclic){totalTime = Math.max(Math.max(...maxCDs), swapTimeStamps.at(-1), (presetTotalTime ?? 0));}
+    else{totalTime = Math.max(swapTimeStamps.at(-1), (presetTotalTime ?? 0));}// 非循环轮不用管CD
     origOnfieldDurations = [...onfieldDurations];
     onfieldDurations[n_chars-1] += totalTime - swapTimeStamps.at(-1); // 如果冷却时间长，就把多出来的站场时间给最后一段
     swapTimeStamps = get_swapTimeStamps(onfieldDurations);
