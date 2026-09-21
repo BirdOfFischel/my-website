@@ -329,6 +329,10 @@ function get_configs(characters){
       cycle_buttonNames = ["有大轮", "无大轮"];
     }
   }
+  if(characters.Vesna?.constellation >= 1){
+    // C1-6的薇斯纳轴长，旅行者不放重击
+    for(let attrParams of cycle_attrParamsList){attrParams["TravelerCryo"].toCastCharge = false;}
+  }
   const cycle_n = cycle_attrParamsList.length;
   const cycle_onfieldActionParamsList = cycle_attrParamsList.map(v=>{return {}});
   const cycle_offfieldActionParamsList = cycle_attrParamsList.map(v=>{return {}});
